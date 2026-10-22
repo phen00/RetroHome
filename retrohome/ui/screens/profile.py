@@ -158,8 +158,7 @@ class Profile(Screen):
             gfx.progress_bar(s, (x, card.y + 64, bw, 12), p.frac, gfx.tier_bar_color(p.level))
             gfx.blit_text(s, f"{fmt_int(p.need - p.into)} XP to level {p.level + 1}", (x, card.y + 84), 15,
                           gfx.TEXT_DIM)
-            chips = [(fmt_hours(total_secs), "played"), (str(len(played)), "games"),
-                     (fmt_int(unlocked), "achievements")]
+            chips = [(fmt_hours(total_secs), "played"), (str(len(played)), "games")]
             cx = x
             for val, label in chips:
                 vw = gfx.measure(val, 16, True)[0]
@@ -175,8 +174,11 @@ class Profile(Screen):
             gfx.blit_text(s, msg, (card.x + 30, card.y + 40), 20, gfx.TEXT_FAINT)
             gfx.blit_text(s, f"{fmt_hours(total_secs)} played in RetroHome  ·  {len(played)} games",
                           (card.x + 30, card.y + 76), 16, gfx.TEXT_DIM)
+        # ---- RetroAchievements numbers
+        top = card.bottom + 18
+        if ra.profile:
+            top = self._ra_stats(s, pygame.Rect(60, top, gfx.W - 120, 74), ra.profile, unlocked) + 18
         # ---- bottom: recently played (left) + trophy shelf (right)
-        top = card.bottom + 22
         gap = 20
         right_w = int((gfx.W - 120 - gap) * 0.40)
         left = pygame.Rect(60, top, gfx.W - 120 - gap - right_w, gfx.H - 56 - top)
@@ -199,6 +201,24 @@ class Profile(Screen):
                 y += row_h
         self._draw_shelf(s, shelf)
 
+    def _ra_stats(self, s, box, prof, unlocked):
+        """Row of stat tiles: points, softcore points, RetroPoints, achievements, site rank."""
+        rank, ranked = prof.get("Rank"), prof.get("TotalRanked")
+        tiles = [(fmt_int(prof.get("TotalPoints") or 0), "Points", gfx.GOLD),
+                 (fmt_int(prof.get("TotalSoftcorePoints") or 0), "Softcore points", gfx.TEXT),
+                 (fmt_int(prof.get("TotalTruePoints") or 0), "RetroPoints", gfx.ACCENT_HI),
+                 (fmt_int(unlocked), "Achievements", gfx.TEXT),
+                 (f"#{fmt_int(rank)}" if rank else "–",
+                  f"Site rank of {fmt_int(ranked)}" if rank and ranked else "Site rank", gfx.TEXT)]
+        gap = 14
+        w = (box.w - gap * (len(tiles) - 1)) / len(tiles)
+        for i, (val, label, col) in enumerate(tiles):
+            r = pygame.Rect(int(box.x + i * (w + gap)), box.y, int(w), box.h)
+            gfx.rrect(s, (255, 255, 255, 14), r, 16)
+            gfx.blit_text(s, val, (r.x + 20, r.y + 12), 26, col, True, max_w=r.w - 30)
+            gfx.blit_text(s, label, (r.x + 20, r.y + 46), 14, gfx.TEXT_DIM, max_w=r.w - 30)
+        return box.bottom
+
     def _draw_shelf(self, s, box):
         items = self._shelf()
         mythic = sum(1 for t in items if t[2] == AWARD_MYTHIC)
@@ -207,7 +227,7 @@ class Profile(Screen):
         gfx.blit_text(s, f"{mythic} Mythic  ·  {plat} Platinum", (box.right - 22, box.y + 19), 14, gfx.TEXT_DIM,
                       anchor="topright")
         if not items:
-            gfx.blit_text(s, "Complete a game 100% to put it on the shelf.", (box.x + 22, box.y + 56), 15,
+            gfx.blit_text(s, "Beat a game to put it on the shelf.", (box.x + 22, box.y + 56), 15,
                           gfx.TEXT_FAINT, max_w=box.w - 44)
             return
         size, gap = 64, 14
@@ -299,7 +319,7 @@ class Profile(Screen):
     def _trophy_case(self, s):
         items = self._trophies()
         if not items:
-            gfx.blit_text(s, "Beat or 100% a game to earn your first award.", (60, 180), 20, gfx.TEXT_FAINT)
+            gfx.blit_text(s, "Beat a game to earn your first Platinum.", (60, 180), 20, gfx.TEXT_FAINT)
             return
         y0, row_h = 166, 80
         for i in self._scroll_rows(len(items), y0, row_h):
@@ -312,7 +332,8 @@ class Profile(Screen):
             icon = url_image(self.app, media_url(c.get("ImageIcon", "")), 56, radius=8)
             draw_icon_slot(s, (r.x + 7, r.y + 7, 56, 56), icon, 8)
             gfx.blit_text(s, c.get("Title", ""), (r.x + 80, r.y + 10), 20, gfx.TEXT, True, max_w=r.w - 420)
-            gfx.blit_text(s, f"{c.get('ConsoleName', '')}  ·  {c.get('MaxPossible', 0)} achievements",
+            gfx.blit_text(s, "  ·  ".join(b for b in (c.get("ConsoleName") or "",
+                                                      f"{c.get('MaxPossible', 0)} achievements") if b),
                           (r.x + 80, r.y + 38), 15, gfx.TEXT_DIM)
             info = AWARD_INFO[award]
             gfx.award_emblem(s, (r.right - 200, r.centery), award, 36, self.app.t)

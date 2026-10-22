@@ -131,6 +131,10 @@ class RAState:
         def work():
             prof = client.profile()
             try:
+                prof = dict(prof, **client.rank())   # site rank for the profile overview
+            except (RAError, OSError, ValueError, TypeError):
+                pass
+            try:
                 recent = client.recent_achievements()
             except RAError:
                 recent = []

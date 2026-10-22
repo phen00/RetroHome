@@ -114,6 +114,13 @@ class RetroAchievements:
     def profile(self) -> dict:
         return self._call("API_GetUserProfile.php", u=self.user)
 
+    def rank(self) -> dict:
+        """{"Rank", "TotalRanked"} from the user summary (Rank is None for untracked users)."""
+        res = self._call("API_GetUserSummary.php", u=self.user, g=0, a=0)
+        if not isinstance(res, dict):
+            return {}
+        return {"Rank": res.get("Rank"), "TotalRanked": res.get("TotalRanked")}
+
     def recent_achievements(self, minutes=60 * 24 * 30) -> list:
         res = self._call("API_GetUserRecentAchievements.php", u=self.user, m=minutes)
         return res if isinstance(res, list) else []

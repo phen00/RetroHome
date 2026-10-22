@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6 — 2026-10-22
+- **Platinum is now the award for beating a game** (hardcore or softcore). The separate Beaten
+  award is gone; games you'd already beaten count as Platinum
+- Your profile's Overview now shows your RetroAchievements points, softcore points, RetroPoints,
+  achievements unlocked and site rank
+
 ## 1.0.5 — 2026-10-22
 - **Automatic updates:** RetroHome now checks GitHub for new versions at start-up, shows what's
   changed and can download and install the update itself (RetroHome restarts; settings and

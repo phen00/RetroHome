@@ -480,7 +480,7 @@ def level_badge(dst, center, level, size=48, t=0.0, number=True):
 
 
 def award_emblem(dst, center, award, size=28, t=0.0):
-    """Small emblem for a game award (Mythic / Platinum / Beaten)."""
+    """Small emblem for a game award (Mythic / Platinum)."""
     from ..progression import AWARD_INFO, AWARD_MYTHIC
     info = AWARD_INFO.get(award)
     if not info:

@@ -8,9 +8,7 @@ XP is built from your RetroAchievements record so it can't be farmed locally:
     the fewer players own an achievement)                                    x6
   * per-game awards, scaled by the size of the set:
       Mythic   (100% in hardcore)    1500 + 60 per achievement
-      Platinum (100% in softcore)     600 + 25 per achievement
-      Beaten   (hardcore)             300 + 10 per achievement
-      Beaten   (softcore)             120 +  4 per achievement
+      Platinum (game beaten)          500 + 20 per achievement
 
 Level curve: total XP to reach level L is  10 * (L - 1) ** 1.9  (rounded). Early levels fly
 by (a single 10-point hardcore achievement is ~100 XP, several levels at the start); each level
@@ -24,23 +22,17 @@ from dataclasses import dataclass
 
 LEVEL_EXP = 1.9
 LEVEL_K = 10
-CURVE_VERSION = 2     # bump when the curve changes so the jump isn't celebrated as a level-up
+CURVE_VERSION = 3     # bump when the curve changes so the jump isn't celebrated as a level-up
 PRESTIGE_EVERY = 50
 
 AWARD_MYTHIC = "mythic"
 AWARD_PLATINUM = "platinum"
-AWARD_BEATEN_HC = "beaten-hardcore"
-AWARD_BEATEN = "beaten"
 
 AWARD_INFO = {
     AWARD_MYTHIC: dict(name="Mythic", desc="Every achievement unlocked in hardcore", base=1500, per=60, rank=4,
                        color=(255, 92, 170), color2=(120, 210, 255)),
-    AWARD_PLATINUM: dict(name="Platinum", desc="Every achievement unlocked", base=600, per=25, rank=3,
+    AWARD_PLATINUM: dict(name="Platinum", desc="Game beaten", base=500, per=20, rank=3,
                          color=(210, 225, 240), color2=(140, 160, 190)),
-    AWARD_BEATEN_HC: dict(name="Beaten", desc="Game beaten in hardcore", base=300, per=10, rank=2,
-                          color=(240, 190, 60), color2=(170, 110, 30)),
-    AWARD_BEATEN: dict(name="Beaten", desc="Game beaten", base=120, per=4, rank=1,
-                       color=(200, 140, 80), color2=(120, 80, 40)),
 }
 
 
@@ -49,12 +41,8 @@ def award_from_ra(kind: str, num_awarded=0, num_hc=0, total=0) -> str:
     k = (kind or "").lower()
     if k == "mastered" or (total and num_hc >= total):
         return AWARD_MYTHIC
-    if k == "completed" or (total and num_awarded >= total):
-        return AWARD_PLATINUM
-    if k == "beaten-hardcore":
-        return AWARD_BEATEN_HC
-    if k == "beaten-softcore":
-        return AWARD_BEATEN
+    if k in ("completed", "beaten-hardcore", "beaten-softcore") or (total and num_awarded >= total):
+        return AWARD_PLATINUM     # beating the game (or 100% in softcore, which includes it)
     return ""
 
 
@@ -105,7 +93,7 @@ def compute(profile: dict, completion: list) -> Progress:
         "Softcore points": sc * 4,
         "Rarity bonus": max(0, true - hc) * 6,
     }
-    award_counts = {AWARD_MYTHIC: 0, AWARD_PLATINUM: 0, AWARD_BEATEN_HC: 0, AWARD_BEATEN: 0}
+    award_counts = {AWARD_MYTHIC: 0, AWARD_PLATINUM: 0}
     award_xp_total = 0
     for c in completion or []:
         size = int(c.get("MaxPossible") or 0)

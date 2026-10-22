@@ -335,7 +335,6 @@ class App:
             a = prog.awards
             stats = {"level": prog.level, "xp": prog.xp, "mythic": a.get("mythic", 0),
                      "platinum": a.get("platinum", 0),
-                     "beaten": a.get("beaten-hardcore", 0) + a.get("beaten", 0),
                      "ra_user": self.config["ra_user"]}
         lock = self.__dict__.setdefault("_sync_lock", __import__("threading").Lock())
 

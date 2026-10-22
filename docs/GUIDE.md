@@ -84,8 +84,7 @@ frames along the way (no spoilers here). Nothing resets.
 Game awards, shown on tiles, the game info and the trophy case:
 
 * **Mythic** – every achievement in hardcore (RetroAchievements "Mastered")
-* **Platinum** – every achievement (softcore "Completed")
-* **Beaten** – the game's beaten condition (hardcore or softcore)
+* **Platinum** – the game is beaten (RetroAchievements "Beaten", hardcore or softcore)
 
 Earning a Mythic/Platinum plays a celebration after the session report. Open your profile by moving right past the last tab on the home bar (your name is highlighted),
 or from the RetroAchievements card (move down, press A). The overview shows your XP bar and

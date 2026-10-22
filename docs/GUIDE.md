@@ -94,6 +94,18 @@ started from RetroHome); left/right or LB/RB switch
 tabs, and A on a trophy opens that game's achievement list. In the achievement tracker, A opens
 a game's achievement list (even for games not in your library) and X jumps to it in your library.
 
+## Home screen cards
+
+Below the game info are three cards (move down to reach them, A to open):
+
+* **Continue hunting** – games you've started but not finished; opens the achievement tracker
+* **New on RetroAchievements** – the newest achievement sets on the site (from RetroAchievements'
+  list of finished set claims, refreshed hourly). In the full list, A shows a set's achievements
+  and X gets the game through the built-in browser, or plays it if it's already in your library
+* **Friends** – who's playing right now, same order as the full Friends list, which A opens
+
+Your level and XP are shown in a bar along the bottom of the home screen.
+
 ## Friends
 
 Friends are the people you follow on RetroAchievements; there is no separate RetroHome friends

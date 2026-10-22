@@ -24,6 +24,9 @@ from . import gfx  # noqa: E402
 from .input import Input  # noqa: E402
 
 
+HINT_TEXT = 15     # button-prompt text size (bottom right)
+
+
 class Screen:
     opaque = True
 
@@ -168,6 +171,8 @@ class App:
         self.ra.on_progress = lambda: self.sync_online()
         from ..friends import Friends
         self.friends = Friends(self.ra, self.tasks)
+        from ..newsets import NewSets
+        self.new_sets = NewSets(self.ra, self.tasks)
         self.emus = None
         self.artwork = None
         self.playing = None
@@ -425,6 +430,19 @@ class App:
         self.running = False
 
     # ------------------------------------------------------------ drawing helpers
+    def hints_left(self, hints):
+        """x where the button hints (drawn from the bottom-right) begin."""
+        from ..padstyle import label
+        kb = self.input.last_device == "keyboard"
+        keys = {"a": "Enter", "b": "Esc", "x": "X", "y": "Y", "lb": "Q", "rb": "E", "start": "M",
+                "select": "Tab", "guide": "Esc"}
+        x = gfx.W - 36
+        for btn, text in hints or []:
+            x -= gfx.measure(text, HINT_TEXT)[0] + 10
+            cap = keys.get(btn, btn) if kb else label(self.input.pad_family, btn)
+            x -= (gfx.measure(cap, 12, True)[0] + 14 + 22) if (kb or btn not in ("a", "b", "x", "y")) else 44
+        return x
+
     def draw_hints(self, s, hints):
         if not hints:
             return
@@ -434,38 +452,38 @@ class App:
         keys = {"a": "Enter", "b": "Esc", "x": "X", "y": "Y", "lb": "Q", "rb": "E", "start": "M",
                 "select": "Tab", "guide": "Esc"}
         x = gfx.W - 36
-        y = gfx.H - 26
+        y = gfx.H - 22
         for btn, text in reversed(hints):
-            lw = gfx.measure(text, 17)[0]
+            lw = gfx.measure(text, HINT_TEXT)[0]
             x -= lw
-            gfx.blit_text(s, text, (x, y), 17, gfx.TEXT_DIM, anchor="midleft")
+            gfx.blit_text(s, text, (x, y), HINT_TEXT, gfx.TEXT_DIM, anchor="midleft")
             x -= 10
             cap = keys.get(btn, btn) if kb else label(fam, btn)
             if kb or btn not in ("a", "b", "x", "y"):
-                tw = gfx.measure(cap, 14, True)[0] + 16
-                r = pygame.Rect(x - tw, y - 12, tw, 24)
-                gfx.rrect(s, (255, 255, 255, 40), r, 7)
-                gfx.blit_text(s, cap, r.center, 14, gfx.TEXT, True, anchor="center")
-                x = r.x - 26
+                tw = gfx.measure(cap, 12, True)[0] + 14
+                r = pygame.Rect(x - tw, y - 10, tw, 20)
+                gfx.rrect(s, (255, 255, 255, 40), r, 6)
+                gfx.blit_text(s, cap, r.center, 12, gfx.TEXT, True, anchor="center")
+                x = r.x - 22
                 continue
-            cx = x - 13
+            cx = x - 11
             if cap in FACE_COLORS["shapes"]:          # PlayStation: draw the symbol
-                gfx.draw.circle(s, (34, 38, 52), (cx, y), 13)
+                gfx.draw.circle(s, (34, 38, 52), (cx, y), 11)
                 col = FACE_COLORS["shapes"][cap]
                 if cap == "cross":
-                    gfx.draw.line(s, col, (cx - 6, y - 6), (cx + 6, y + 6), 3)
-                    gfx.draw.line(s, col, (cx - 6, y + 6), (cx + 6, y - 6), 3)
+                    gfx.draw.line(s, col, (cx - 5, y - 5), (cx + 5, y + 5), 3)
+                    gfx.draw.line(s, col, (cx - 5, y + 5), (cx + 5, y - 5), 3)
                 elif cap == "circle":
-                    gfx.draw.circle(s, col, (cx, y), 7, 2)
+                    gfx.draw.circle(s, col, (cx, y), 6, 2)
                 elif cap == "square":
-                    gfx.draw.rect(s, col, (cx - 6, y - 6, 12, 12), 2)
+                    gfx.draw.rect(s, col, (cx - 5, y - 5, 10, 10), 2)
                 else:
-                    gfx.draw.polygon(s, col, [(cx, y - 7), (cx + 7, y + 5), (cx - 7, y + 5)], 2)
+                    gfx.draw.polygon(s, col, [(cx, y - 6), (cx + 6, y + 4), (cx - 6, y + 4)], 2)
             else:
                 col = (FACE_COLORS["nintendo"] if fam == "nintendo" else FACE_COLORS["letters"])[btn]
-                gfx.draw.circle(s, col, (cx, y), 13)
-                gfx.blit_text(s, cap, (cx, y + 1), 15, (12, 14, 24), True, anchor="center")
-            x -= 26 + 26
+                gfx.draw.circle(s, col, (cx, y), 11)
+                gfx.blit_text(s, cap, (cx, y + 1), 13, (12, 14, 24), True, anchor="center")
+            x -= 22 + 22
 
     def draw_toasts(self, s, dt):
         y = 24

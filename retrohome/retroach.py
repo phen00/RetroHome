@@ -121,6 +121,11 @@ class RetroAchievements:
             return {}
         return {"Rank": res.get("Rank"), "TotalRanked": res.get("TotalRanked")}
 
+    def completed_claims(self) -> list:
+        """Recently finished set-development claims (newest sets and revisions), up to 1000."""
+        res = self._call("API_GetClaims.php", k=1)
+        return res if isinstance(res, list) else []
+
     def following(self, limit=500) -> list:
         """Everyone this user follows on RetroAchievements: [{"User", "ULID", "Points", "IsFollowingMe"...}]."""
         out, offset = [], 0

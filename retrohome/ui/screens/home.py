@@ -207,11 +207,15 @@ class Home(Screen):
             self.app.push(RASetup(self.app))
             return
         if self.track_i == 0:
-            from .profile import Profile
-            self.app.push(Profile(self.app))
-            return
-        from .tracker import Tracker
-        self.app.push(Tracker(self.app, tab=1 if self.track_i == 2 else 0, on_pick=self._picked_from_grid))
+            from .tracker import Tracker
+            self.app.push(Tracker(self.app, tab=1, on_pick=self._picked_from_grid))
+        elif self.track_i == 1:
+            from .newsets import NewSetsScreen
+            self.app.push(NewSetsScreen(self.app))
+        else:
+            from .profile import FRIENDS, Profile
+            self.app.push(Profile(self.app, tab=FRIENDS))
+            self.app.friends.refresh(every=30)
 
     def on_game_closed(self, game):
         pass
@@ -231,6 +235,9 @@ class Home(Screen):
         if self.app.ra.enabled and time.time() - self.last_ra_poll > 300:
             self.last_ra_poll = time.time()
             self.app.ra.refresh()
+        if self.app.ra.enabled:
+            self.app.friends.refresh(every=180)
+            self.app.new_sets.refresh()
 
     # ------------------------------------------------------------ drawing
     def draw(self, s):
@@ -245,7 +252,10 @@ class Home(Screen):
         self._draw_tracker(s)
         status = self.app.library.scan_status or self.app.ra.match_status
         if status:
-            gfx.blit_text(s, status, (40, gfx.H - 26), 15, gfx.TEXT_FAINT, anchor="midleft")
+            gfx.blit_text(s, status, (ROW_X, gfx.H - 20), 15, gfx.TEXT_FAINT, anchor="midleft",
+                          max_w=max(100, self.app.hints_left(self.hints()) - 40 - ROW_X))
+        else:
+            self._draw_xp_bar(s)
 
     SHOT_SECS = 7.0
 
@@ -562,8 +572,10 @@ class Home(Screen):
         if got_hc:
             label += f"  ({got_hc} hardcore)"
         trophy_col = gfx.GOLD if total and got >= total else gfx.TEXT
-        gfx.blit_text(s, label, (x, y), 19, trophy_col, True)
-        gfx.blit_text(s, f"{pts_got} / {pts_total} pts", (x + 440, y), 17, gfx.GOLD, anchor="topright")
+        pts = f"{pts_got} / {pts_total} pts"
+        pts_w = gfx.measure(pts, 17)[0]
+        t = gfx.blit_text(s, label, (x, y), 19, trophy_col, True, max_w=440 - pts_w - 16)
+        gfx.blit_text(s, pts, (max(x + 440, t.right + 16 + pts_w), y + 1), 17, gfx.GOLD, anchor="topright")
         if award:
             info = AWARD_INFO[award]
             gfx.award_emblem(s, (x + 474, y + 18), award, 30, self.app.t)
@@ -590,70 +602,102 @@ class Home(Screen):
             if bx + size > x + max_w:
                 break
 
+    CARDS = ["Continue hunting", "New on RetroAchievements", "Friends"]
+
     def _draw_tracker(self, s):
         ra = self.app.ra
-        x0 = ROW_X
-        widths = [340, 420, gfx.W - 2 * ROW_X - 340 - 420 - 2 * 20]
-        titles = ["RetroAchievements", "Recently unlocked", "Continue hunting"]
-        x = x0
-        for i, w in enumerate(widths):
-            r = pygame.Rect(x, TRACK_Y, w, TRACK_H)
+        gap = 20
+        w = (gfx.W - 2 * ROW_X - 2 * gap) / 3
+        for i, title in enumerate(self.CARDS):
+            r = pygame.Rect(int(ROW_X + i * (w + gap)), TRACK_Y, int(w), TRACK_H)
             sel = self.focus == "tracker" and self.track_i == i
             gfx.rrect(s, (12, 18, 38, 215), r, 16)
             gfx.rrect(s, (255, 255, 255, 18), r, 16, 1)
             if sel:
                 gfx.glow_border(s, r, 16, self.app.t)
-            gfx.blit_text(s, titles[i], (r.x + 18, r.y + 14), 15, gfx.TEXT_DIM, True)
+            gfx.blit_text(s, title, (r.x + 18, r.y + 14), 15, gfx.TEXT_DIM, True)
             inner = pygame.Rect(r.x + 18, r.y + 42, r.w - 36, r.h - 54)
             if not ra.enabled:
                 if i == 0:
                     for k, ln in enumerate(gfx.wrap("Not signed in. Go down here and press A, or open Settings, "
-                                                    "to connect your account.", 16, inner.w, max_lines=4)):
+                                                    "to connect your RetroAchievements account.", 16, inner.w,
+                                                    max_lines=4)):
                         gfx.blit_text(s, ln, (inner.x, inner.y + k * 22), 16, gfx.TEXT_FAINT)
             elif ra.error and not ra.profile:
                 if i == 0:
                     for k, ln in enumerate(gfx.wrap(ra.error, 16, inner.w, max_lines=4)):
                         gfx.blit_text(s, ln, (inner.x, inner.y + k * 22), 16, gfx.RED)
-            elif not ra.profile:
-                if i == 0:
-                    gfx.blit_text(s, "Loading…", inner.topleft, 16, gfx.TEXT_FAINT)
+            elif not ra.profile and i == 0:
+                gfx.blit_text(s, "Loading…", inner.topleft, 16, gfx.TEXT_FAINT)
             else:
-                [self._card_profile, self._card_recent, self._card_hunting][i](s, inner)
-            x += w + 20
+                [self._card_hunting, self._card_new, self._card_friends][i](s, inner)
 
-    def _card_profile(self, s, r):
-        p = self.app.ra.profile
-        prog = self.app.ra.prog
-        av = url_image(self.app, media_url(p.get("UserPic", "")), 60, circle=True)
-        draw_icon_slot(s, (r.x, r.y, 60, 60), av, 30)
-        tx = r.x + 74
-        gfx.blit_text(s, p.get("User", ""), (tx, r.y), 21, gfx.TEXT, True, max_w=r.right - tx - 50)
-        gfx.blit_text(s, f"{fmt_int(p.get('TotalPoints', 0))} pts", (tx, r.y + 28), 16, gfx.GOLD, True)
-        if prog:
-            gfx.level_badge(s, (r.right - 22, r.y + 22), prog.level, 44, self.app.t)
-            gfx.progress_bar(s, (r.x, r.y + 76, r.w, 7), prog.frac, gfx.tier_bar_color(prog.level, self.app.t))
-            gfx.blit_text(s, f"Lv {prog.level}  ·  {fmt_int(prog.into)} / {fmt_int(prog.need)} XP",
-                          (r.x, r.y + 90), 14, gfx.TEXT_DIM)
-            ax = r.right
-            for key in ("platinum", "mythic"):
-                n = prog.awards.get(key, 0)
-                t = gfx.blit_text(s, str(n), (ax, r.y + 98), 15, gfx.TEXT, True, anchor="midright")
-                gfx.award_emblem(s, (t.x - 12, r.y + 98), key, 18, self.app.t)
-                ax = t.x - 30
+    def _card_new(self, s, r):
+        ns = self.app.new_sets
+        items = ns.list[:3]
+        if not items:
+            gfx.blit_text(s, ns.error or "Loading…", r.topleft, 15, gfx.RED if ns.error else gfx.TEXT_FAINT,
+                          max_w=r.w)
+            return
+        have = {g.ra_game_id for g in self.app.library.all if g.ra_game_id}
+        y = r.y
+        for it in items:
+            draw_icon_slot(s, (r.x, y, 32, 32), url_image(self.app, it["icon"], 32, radius=5), 5)
+            right = ago(it["added"]) if it["added"] else ""
+            if it["GameID"] in have:
+                right = "In library"
+            rw = gfx.measure(right, 13)[0] + 10 if right else 0
+            gfx.blit_text(s, it["Title"], (r.x + 42, y - 1), 15, gfx.TEXT, True, max_w=r.w - 42 - rw)
+            gfx.blit_text(s, it["ConsoleName"], (r.x + 42, y + 18), 13, gfx.TEXT_DIM, max_w=r.w - 42 - rw)
+            if right:
+                gfx.blit_text(s, right, (r.right, y + 1), 13, gfx.GREEN if right == "In library" else gfx.TEXT_FAINT,
+                              anchor="topright")
+            y += 38
 
-    def _card_recent(self, s, r):
-        recent = self.app.ra.recent[:3]
-        if not recent:
-            gfx.blit_text(s, "Nothing unlocked in the last 30 days.", r.topleft, 16, gfx.TEXT_FAINT)
+    def _card_friends(self, s, r):
+        fr = self.app.friends
+        items = fr.list[:3]
+        if not items:
+            msg = (fr.error if fr.error else "Loading…" if not fr.loaded else
+                   "Follow people on RetroAchievements to see what they're playing. Press A to add a friend.")
+            for k, ln in enumerate(gfx.wrap(msg, 15, r.w, max_lines=4)):
+                gfx.blit_text(s, ln, (r.x, r.y + k * 21), 15, gfx.RED if fr.error else gfx.TEXT_FAINT)
             return
         y = r.y
-        for a in recent:
-            img = badge(self.app, a.get("BadgeName", "00000"), 32)
-            draw_icon_slot(s, (r.x, y, 32, 32), img, 5)
-            gfx.blit_text(s, a.get("Title", ""), (r.x + 42, y - 1), 16, gfx.TEXT, True, max_w=r.w - 90)
-            gfx.blit_text(s, a.get("GameTitle", ""), (r.x + 42, y + 18), 13, gfx.TEXT_DIM, max_w=r.w - 90)
-            gfx.blit_text(s, str(a.get("Points", "")), (r.right, y + 8), 15, gfx.GOLD, True, anchor="topright")
+        for f in items:
+            draw_icon_slot(s, (r.x, y, 32, 32), url_image(self.app, f["pic"], 32, circle=True), 16)
+            if f["playing"]:
+                gfx.draw.circle(s, (12, 18, 38), (r.x + 28, y + 28), 7)
+                gfx.draw.circle(s, gfx.GREEN, (r.x + 28, y + 28), 5)
+            gfx.blit_text(s, f["user"], (r.x + 42, y - 1), 15, gfx.TEXT, True, max_w=r.w - 42)
+            if f["playing"]:
+                line, col = (f"Playing {f['game']}" if f["game"] else "Playing now"), gfx.GREEN
+            elif f["game"]:
+                line, col = f"{f['game']}" + (f"  ·  {ago(f['last'])}" if f["last"] else ""), gfx.TEXT_DIM
+            else:
+                line, col = "Hasn't played anything yet", gfx.TEXT_FAINT
+            gfx.blit_text(s, line, (r.x + 42, y + 18), 13, col, max_w=r.w - 42)
             y += 38
+
+    def _draw_xp_bar(self, s):
+        """Level + XP along the bottom, stopping short of the button hints."""
+        prog = self.app.ra.prog
+        y = gfx.H - 21
+        right = self.app.hints_left(self.hints()) - 48
+        x = ROW_X
+        if not prog or right - x < 260:
+            return
+        gfx.level_badge(s, (x + 12, y), prog.level, 24, self.app.t, number=False)
+        x += 32
+        t = gfx.blit_text(s, f"Lv {prog.level}", (x, y), 16, gfx.TEXT, True, anchor="midleft")
+        x = t.right + 14
+        nums = f"{fmt_int(prog.into)} / {fmt_int(prog.need)} XP"
+        nw = gfx.measure(nums, 14)[0]
+        bar_w = right - x - nw - 14
+        if bar_w > 60:
+            gfx.progress_bar(s, (x, y - 4, bar_w, 8), prog.frac, gfx.tier_bar_color(prog.level, self.app.t))
+            x += bar_w + 14
+        gfx.blit_text(s, nums, (x, y), 14, gfx.TEXT_DIM, anchor="midleft")
 
     def hunting(self):
         comp = [c for c in self.app.ra.completion

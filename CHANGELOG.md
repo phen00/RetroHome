@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.8 — 2026-10-22
+- New row of cards on the home screen: **Continue hunting**, **New on RetroAchievements** (the
+  newest achievement sets on the site; A shows a set's achievements, X gets the game or plays it if you
+  have it) and **Friends** (who's playing; opens your friends list)
+- Your level and XP now sit in a bar along the bottom of the home screen
+- Smaller button prompts at the bottom right
+- Fixed the achievement count overlapping the points on the home screen
+
 ## 1.0.7 — 2026-10-22
 - **Friends:** a new Friends tab on your profile shows the people you follow on RetroAchievements
   and what they're playing right now (or last played). **Add a friend** opens their RA page so you

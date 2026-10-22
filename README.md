@@ -4,8 +4,8 @@
 
 > [!NOTE]
 > **A personal project.** I made RetroHome for myself and I'm only putting it here to make it
-> easier to share with friends. Feel free to use it, but expect rough edges, and there's no
-> promise of support or updates.
+> easier to share with friends. Feel free to use it! If something doesn't work, open an
+> [issue](../../issues) and I'll try to fix it.
 
 <h1 align="center">RetroHome</h1>
 

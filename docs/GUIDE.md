@@ -109,6 +109,10 @@ to continue.
 
 ## Controls
 
+Button names on screen match your controller (Xbox, Xbox 360, PS4, PS5, Switch Pro, Stadia,
+Steam Deck). The table uses Xbox positions: A = bottom button (✕ on PlayStation).
+
+
 | Pad | Keyboard | Home screen |
 |---|---|---|
 | D-pad / left stick | Arrows / WASD | Move (hold to scroll fast) |
@@ -117,8 +121,8 @@ to continue.
 | X | X | Favourite |
 | Y | Y | Achievements for this game |
 | LB / RB | Q / E | Previous / next category |
-| View (Select) | Tab | Game Library grid |
-| Menu (Start) | M / F1 | Settings |
+| Select / View / Back / Share / Create / − | Tab | Game Library grid |
+| Start / Menu / Options / + | M / F1 | Settings |
 | | F11 | Toggle fullscreen |
 
 Move **up** to reach the category bar, **down** to reach the achievement tracker cards.
@@ -130,7 +134,9 @@ RetroHome auto-detects EmuDeck's emulators:
 * **Steam Deck / Linux** – EmuDeck's launcher scripts in `Emulation/tools/launchers/`, falling back
   to Flatpaks, AppImages in `~/Applications`, or anything on your PATH. RetroArch cores are found in
   the RetroArch Flatpak's `cores` folder.
-* **Windows** – `%APPDATA%\EmuDeck\Emulators\…` (and Program Files) for RetroArch, Dolphin, PCSX2,
+* **Windows** – EmuDeck's `%USERPROFILE%\emudeck\EmulationStation-DE\Emulators\…` (older versions:
+  `%APPDATA%\EmuDeck\Emulators\…`), and Program Files. If your emulators are somewhere else, pick the
+  folder in *Settings → Emulators folder* for RetroArch, Dolphin, PCSX2,
   DuckStation, PPSSPP, RPCS3, Cemu, Ryujinx/Eden/Citron, xemu, Xenia, melonDS, Azahar, etc.
 
 Each system uses EmuDeck's defaults (e.g. NES → RetroArch Mesen, PS1 → DuckStation, PS2 → PCSX2,
@@ -182,7 +188,8 @@ The browser is an optional ~150–200 MB component (Qt WebEngine) installed the 
 use it, or from Settings. It only uses prebuilt packages, so no compiler is needed. .7z and .rar
 files are opened with 7-Zip if you have it, otherwise with the `tar` built into Windows 10/11 and
 SteamOS (very new RAR5 archives may need 7-Zip on Windows). Gamepad: left stick moves the pointer, A clicks, right stick/D-pad scroll, LB/RB back and
-forward, Y address bar (opens the Steam keyboard on the Deck), Menu closes.
+forward, Y address bar (opens the Steam keyboard on the Deck), **Start** (Options on PlayStation) or the
+Home/PS button closes the browser.
 
 ## Box art and backgrounds
 

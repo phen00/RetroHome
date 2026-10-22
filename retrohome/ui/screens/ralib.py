@@ -289,6 +289,7 @@ def open_browser(app, game_entry, folder, console_name):
            "--title", game_entry.get("Title", "")]
     if app.config["fullscreen"]:
         cmd.append("--fullscreen")
+    cmd += ["--pad-family", app.input.pad_family]
     env = os.environ.copy()
     env["PYTHONPATH"] = str(root) + os.pathsep + env.get("PYTHONPATH", "")
     try:
@@ -296,16 +297,32 @@ def open_browser(app, game_entry, folder, console_name):
     except OSError as e:
         app.dialog("Couldn't open the browser", str(e))
         return
-    app.input.enabled = False
     app.push(BrowserOpen(app, proc, report, game_entry.get("Title", ""), folder))
 
 
 class BrowserOpen(Screen):
+    background_input = True     # see Start/Home presses even while the browser window has focus
+
     def __init__(self, app, proc, report, title, folder):
         super().__init__(app)
         self.proc, self.report, self.title, self.folder = proc, Path(report), title, folder
         self.results = []
         self.last_read = 0
+        self.closing = False
+
+    @property
+    def close_flag(self):
+        return self.report.with_suffix(".close")
+
+    def on_action(self, a):
+        # Start / Options / Menu / + or the Home (PS / Xbox) button closes the browser
+        if a in ("start", "guide") and not self.closing:
+            self.closing = True
+            try:
+                self.close_flag.write_text("close")
+            except OSError:
+                pass
+            self.close_requested = time.time()
 
     def _read(self):
         try:
@@ -319,14 +336,20 @@ class BrowserOpen(Screen):
             self._read()
         code = self.proc.poll()
         if code is None:
+            # the browser closes itself on the flag; if it's stuck, end it
+            if self.closing and time.time() - getattr(self, "close_requested", time.time()) > 150:
+                self.proc.terminate()
             return
         self._read()
+        try:
+            self.close_flag.unlink()
+        except OSError:
+            pass
         try:
             self.report.unlink()
         except OSError:
             pass
         app = self.app
-        app.input.enabled = True
         app.input.reset()
         pygame.event.clear()
         app.pop()
@@ -354,7 +377,11 @@ class BrowserOpen(Screen):
             col = gfx.GREEN if r.get("status") == "ok" else gfx.GOLD
             gfx.blit_text(s, r.get("message", ""), (gfx.W // 2, y), 17, col, anchor="center", max_w=1000)
             y += 26
-        gfx.blit_text(s, "Close the browser window to come back.", (gfx.W // 2, gfx.H - 90), 16, gfx.TEXT_FAINT, anchor="center")
+        from ...padstyle import text_label
+        msg = ("Closing the browser…" if self.closing else
+               f"Press {text_label(self.app.input.pad_family, 'start')} on your controller, or close the "
+               "browser window, to come back.")
+        gfx.blit_text(s, msg, (gfx.W // 2, gfx.H - 90), 16, gfx.TEXT_FAINT, anchor="center")
 
     def hints(self):
         return []

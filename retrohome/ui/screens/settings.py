@@ -1,5 +1,7 @@
 """Settings menu."""
-from ...paths import config_dir
+import os
+from pathlib import Path
+
 from .menu import Menu
 
 
@@ -41,8 +43,9 @@ class Settings(Menu):
             ("Ask who's playing at start-up", "On" if cfg["ask_user_on_start"] else "Off", self._toggle_ask),
             ("Browser for the RA Library", "Installed - A to reinstall/update" if self._browser_ok()
              else "Not installed - A to install (about 150-200 MB)", self._browser),
-            ("Emulator setup", f"Auto-detected from EmuDeck. Overrides: {config_dir() / 'emulators.json'}",
-             self._emus),
+            ("Emulator setup", "Check which consoles are ready to play", self._emus),
+            ("Emulators folder", (app.emus.overrides.get("emulators_dir") if app.emus else "") or
+             "Automatic (finds EmuDeck's emulators)", self._emus_dir),
             ("Quit RetroHome", "", self._quit),
         ]
         self.set_items(items)
@@ -165,10 +168,39 @@ class Settings(Menu):
                 found.append(f"{g.system.label}: {label}")
             except Exception:  # noqa: BLE001
                 missing.append(g.system.label)
-        body = (f"Ready: {len(found)} systems. " +
-                (f"Missing emulator for: {', '.join(missing)}. " if missing else "") +
-                f"To change or add emulators edit {emus.override_path} (reloaded just now).")
+        body = (f"Ready: {', '.join(found) if found else 'none'}. " +
+                (f"Missing emulator for: {', '.join(missing)}. If EmuDeck installed these, choose its "
+                 f"emulators folder in Settings > Emulators folder. " if missing else "") +
+                f"Advanced overrides: {emus.override_path}")
         self.app.dialog("Emulators", body)
+
+    def _emus_dir(self):
+        emus = self.app.emus
+        if emus is None:
+            return
+        from .setup import FolderBrowser
+
+        def picked(path):
+            emus.set_emulators_dir(path)
+            self._build()
+            self._emus()
+
+        def choose():
+            home = Path(os.environ.get("USERPROFILE") or Path.home())
+            start = next((p for p in (home / "emudeck" / "EmulationStation-DE" / "Emulators", home / "emudeck",
+                                      Path.home() / "Applications", home) if p.is_dir()), home)
+            self.app.push(FolderBrowser(self.app, picked, start=start, title="Select your emulators folder",
+                                        check=None))
+
+        def automatic():
+            emus.set_emulators_dir("")
+            self._build()
+            self._emus()
+        if emus.overrides.get("emulators_dir"):
+            self.app.dialog("Emulators folder", f"Currently: {emus.overrides['emulators_dir']}",
+                            [("Choose another", choose), ("Use automatic", automatic), ("Cancel", None)])
+        else:
+            choose()
 
     def _fullscreen(self):
         self.app.toggle_fullscreen()

@@ -7,7 +7,9 @@ from pathlib import Path
 
 os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-os.environ.setdefault("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "0")
+# Read controllers even while another window (the built-in browser) has focus. Screens only act on
+# that background input when they opt in (BrowserOpen does, to close the browser with Start).
+os.environ.setdefault("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1")
 
 import pygame  # noqa: E402
 
@@ -415,28 +417,44 @@ class App:
     def draw_hints(self, s, hints):
         if not hints:
             return
+        from ..padstyle import FACE_COLORS, label
         kb = self.input.last_device == "keyboard"
-        names = {"a": "Enter", "b": "Esc", "x": "X", "y": "Y", "lb": "Q", "rb": "E",
-                 "start": "M", "select": "Tab"}
-        colors = {"a": (80, 200, 120), "b": (230, 90, 90), "x": (80, 150, 240), "y": (240, 200, 70)}
+        fam = self.input.pad_family
+        keys = {"a": "Enter", "b": "Esc", "x": "X", "y": "Y", "lb": "Q", "rb": "E", "start": "M",
+                "select": "Tab", "guide": "Esc"}
         x = gfx.W - 36
         y = gfx.H - 26
-        for btn, label in reversed(hints):
-            lw = gfx.measure(label, 17)[0]
+        for btn, text in reversed(hints):
+            lw = gfx.measure(text, 17)[0]
             x -= lw
-            gfx.blit_text(s, label, (x, y), 17, gfx.TEXT_DIM, anchor="midleft")
+            gfx.blit_text(s, text, (x, y), 17, gfx.TEXT_DIM, anchor="midleft")
             x -= 10
-            if kb or btn in ("lb", "rb", "start", "select"):
-                cap = names[btn] if kb else {"lb": "LB", "rb": "RB", "start": "MENU", "select": "VIEW"}[btn]
+            cap = keys.get(btn, btn) if kb else label(fam, btn)
+            if kb or btn not in ("a", "b", "x", "y"):
                 tw = gfx.measure(cap, 14, True)[0] + 16
                 r = pygame.Rect(x - tw, y - 12, tw, 24)
                 gfx.rrect(s, (255, 255, 255, 40), r, 7)
                 gfx.blit_text(s, cap, r.center, 14, gfx.TEXT, True, anchor="center")
                 x = r.x - 26
+                continue
+            cx = x - 13
+            if cap in FACE_COLORS["shapes"]:          # PlayStation: draw the symbol
+                gfx.draw.circle(s, (34, 38, 52), (cx, y), 13)
+                col = FACE_COLORS["shapes"][cap]
+                if cap == "cross":
+                    gfx.draw.line(s, col, (cx - 6, y - 6), (cx + 6, y + 6), 3)
+                    gfx.draw.line(s, col, (cx - 6, y + 6), (cx + 6, y - 6), 3)
+                elif cap == "circle":
+                    gfx.draw.circle(s, col, (cx, y), 7, 2)
+                elif cap == "square":
+                    gfx.draw.rect(s, col, (cx - 6, y - 6, 12, 12), 2)
+                else:
+                    gfx.draw.polygon(s, col, [(cx, y - 7), (cx + 7, y + 5), (cx - 7, y + 5)], 2)
             else:
-                gfx.draw.circle(s, colors[btn], (x - 13, y), 13)
-                gfx.blit_text(s, btn.upper(), (x - 13, y + 1), 15, (12, 14, 24), True, anchor="center")
-                x -= 26 + 26
+                col = (FACE_COLORS["nintendo"] if fam == "nintendo" else FACE_COLORS["letters"])[btn]
+                gfx.draw.circle(s, col, (cx, y), 13)
+                gfx.blit_text(s, cap, (cx, y + 1), 15, (12, 14, 24), True, anchor="center")
+            x -= 26 + 26
 
     def draw_toasts(self, s, dt):
         y = 24
@@ -503,6 +521,8 @@ class App:
                 top = self.top
                 if top is None:
                     continue
+                if actions and not pygame.key.get_focused() and not getattr(top, "background_input", False):
+                    continue    # another window is focused: ignore stray controller presses
                 try:
                     top.on_event(e)
                     for a in actions:

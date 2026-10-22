@@ -101,9 +101,11 @@ class Welcome(Menu):
 
 
 class FolderBrowser(Screen):
-    def __init__(self, app, on_pick, start=None):
+    def __init__(self, app, on_pick, start=None, title="Select ROM folder", check=_count_system_folders):
         super().__init__(app)
         self.on_pick = on_pick
+        self.title = title
+        self.check = check
         start = Path(start) if start else (Path(app.config["rom_dir"]) if app.config["rom_dir"] else Path.home())
         while not start.exists() and start != start.parent:
             start = start.parent
@@ -193,14 +195,16 @@ class FolderBrowser(Screen):
             self.app.pop()
 
     def draw(self, s):
-        gfx.blit_text(s, "Select ROM folder", (120, 60), 36, gfx.TEXT, True)
+        gfx.blit_text(s, self.title, (120, 60), 36, gfx.TEXT, True)
         cur = str(self.path) if self.path else "This computer"
         gfx.blit_text(s, cur, (120, 112), 20, gfx.ACCENT_HI, max_w=gfx.W - 240)
-        if self.path:
-            n = _count_system_folders(self.path)
+        if self.path and self.check:
+            n = self.check(self.path)
             if n:
                 gfx.blit_text(s, f"✓ Looks like a ROM folder ({n} systems) — press X to use it",
                               (120, 140), 18, gfx.GREEN)
+        elif self.path:
+            gfx.blit_text(s, "Open the folder, then press X to use it", (120, 140), 18, gfx.TEXT_DIM)
         y0, row_h = 180, 52
         visible = (gfx.H - 80 - y0) // row_h
         if self.sel < self.scroll:

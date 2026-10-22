@@ -47,17 +47,31 @@ class Pad:
     def __init__(self):
         self.ok = False
         self.prev = set()
+        self.held = set()
+        self.family = None
+        os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
+        os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+        # PlayStation / Switch / Stadia pads are read directly (HIDAPI) for reliable input
+        for hint in ("SDL_JOYSTICK_HIDAPI_PS4", "SDL_JOYSTICK_HIDAPI_PS5", "SDL_JOYSTICK_HIDAPI_SWITCH",
+                     "SDL_JOYSTICK_HIDAPI_STADIA", "SDL_JOYSTICK_HIDAPI_XBOX"):
+            os.environ.setdefault(hint, "1")
         try:
-            os.environ["SDL_VIDEODRIVER"] = "dummy"
-            os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
-            os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
             import pygame
             from pygame._sdl2 import controller
-            pygame.display.init()
+            # A hidden 1x1 window lets SDL receive controller input on Windows (RawInput / WGI need a
+            # window); fall back to the window-less driver if that isn't possible.
+            try:
+                pygame.display.init()
+                pygame.display.set_mode((1, 1), pygame.HIDDEN | pygame.NOFRAME)
+            except Exception:  # noqa: BLE001
+                pygame.display.quit()
+                os.environ["SDL_VIDEODRIVER"] = "dummy"
+                pygame.display.init()
             pygame.joystick.init()
             controller.init()
             self.pg, self.ctrl = pygame, controller
             self.pads = []
+            self.raw = []
             self.count = -1
             self.ok = True
         except Exception:  # noqa: BLE001
@@ -68,11 +82,24 @@ class Pad:
         if n == self.count:
             return
         self.count = n
-        self.pads = []
+        self.pads, self.raw = [], []
+        from .padstyle import family_from_name
         for i in range(n):
+            try:
+                name = self.pg.joystick.Joystick(i).get_name()
+                self.family = family_from_name(name)
+            except Exception:  # noqa: BLE001
+                pass
             try:
                 if self.ctrl.is_controller(i):
                     self.pads.append(self.ctrl.Controller(i))
+                    continue
+            except Exception:  # noqa: BLE001
+                pass
+            try:   # not in SDL's controller database: read it as a plain joystick
+                j = self.pg.joystick.Joystick(i)
+                j.init()
+                self.raw.append(j)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -88,7 +115,8 @@ class Pad:
         names = {P.CONTROLLER_BUTTON_A: "a", P.CONTROLLER_BUTTON_B: "b", P.CONTROLLER_BUTTON_X: "x",
                  P.CONTROLLER_BUTTON_Y: "y", P.CONTROLLER_BUTTON_LEFTSHOULDER: "lb",
                  P.CONTROLLER_BUTTON_RIGHTSHOULDER: "rb", P.CONTROLLER_BUTTON_START: "start",
-                 P.CONTROLLER_BUTTON_BACK: "select", P.CONTROLLER_BUTTON_DPAD_UP: "up",
+                 P.CONTROLLER_BUTTON_BACK: "select", P.CONTROLLER_BUTTON_GUIDE: "guide",
+                 P.CONTROLLER_BUTTON_DPAD_UP: "up",
                  P.CONTROLLER_BUTTON_DPAD_DOWN: "down", P.CONTROLLER_BUTTON_DPAD_LEFT: "left",
                  P.CONTROLLER_BUTTON_DPAD_RIGHT: "right"}
         for c in self.pads:
@@ -102,6 +130,21 @@ class Pad:
                 for b, name in names.items():
                     if c.get_button(b):
                         held.add(name)
+            except Exception:  # noqa: BLE001
+                continue
+        raw_buttons = {0: "a", 1: "b", 2: "x", 3: "y", 4: "lb", 5: "rb", 6: "select", 7: "start"}
+        for j in self.raw:
+            try:
+                if j.get_numaxes() >= 2:
+                    if abs(j.get_axis(0)) > abs(lx): lx = j.get_axis(0)   # noqa: E701
+                    if abs(j.get_axis(1)) > abs(ly): ly = j.get_axis(1)   # noqa: E701
+                for b, name in raw_buttons.items():
+                    if b < j.get_numbuttons() and j.get_button(b):
+                        held.add(name)
+                if j.get_numhats():
+                    hx, hy = j.get_hat(0)
+                    if hy > 0: held.add("up")      # noqa: E701
+                    if hy < 0: held.add("down")    # noqa: E701
             except Exception:  # noqa: BLE001
                 continue
         pressed = held - self.prev
@@ -173,9 +216,11 @@ class Browser(QMainWindow):
         self.dl_bar = QProgressBar()
         self.dl_bar.setMaximumWidth(260)
         self.dl_bar.hide()
-        hint = QLabel("Pad: L-stick pointer · A click · R-stick/D-pad scroll · LB/RB back/forward · "
-                      "Y address bar · X supported files · Menu close")
-        hint.setObjectName("hint")
+        self.hint = QLabel("")
+        self.hint.setObjectName("hint")
+        hint = self.hint
+        self.pad_family = a.pad_family or "xbox"
+        self._set_hint()
         lay.addWidget(self.where)
         lay.addWidget(self.dl_bar)
         lay.addWidget(self.status, 1)
@@ -199,6 +244,13 @@ class Browser(QMainWindow):
         self.timer.start(16)
         self.last_tick = time.time()
         self.go(a.url)
+
+    def _set_hint(self):
+        from .padstyle import text_label as t
+        f = self.pad_family
+        self.hint.setText(f"Controller: left stick = pointer · {t(f, 'a')} click · right stick / D-pad scroll · "
+                          f"{t(f, 'lb')}/{t(f, 'rb')} back/forward · {t(f, 'y')} address bar · "
+                          f"{t(f, 'x')} supported files · {t(f, 'start')} close")
 
     # ------------------------------------------------------------ navigation
     def go(self, text):
@@ -275,9 +327,20 @@ class Browser(QMainWindow):
             r = self.results[-1]
             self.status.setProperty("shown", len(self.results))
             self.status.setText(("✓ " if r["status"] == "ok" else "⚠ ") + r["message"])
+        flag = self.report_path.with_suffix(".close")
+        if flag.exists():      # RetroHome asked us to close (Start pressed there)
+            try:
+                flag.unlink()
+            except OSError:
+                pass
+            self.close()
+            return
         lx, ly, rx, ry, pressed = self.pad.poll()
         if not self.pad.ok:
             return
+        if self.pad.family and self.pad.family != self.pad_family:
+            self.pad_family = self.pad.family
+            self._set_hint()
 
         def curve(v):
             return 0.0 if abs(v) < 0.15 else (abs(v) - 0.15) / 0.85 * (1 if v > 0 else -1)
@@ -306,7 +369,7 @@ class Browser(QMainWindow):
             self.address.selectAll()
             if os.environ.get("SteamDeck") == "1" or os.environ.get("SteamGamepadUI"):
                 os.system("xdg-open steam://open/keyboard >/dev/null 2>&1 &")
-        if "start" in pressed:
+        if "start" in pressed or "guide" in pressed:
             self.close()
 
     def closeEvent(self, e):
@@ -330,6 +393,7 @@ def main():
     ap.add_argument("--report", required=True)
     ap.add_argument("--title", default="")
     ap.add_argument("--fullscreen", action="store_true")
+    ap.add_argument("--pad-family", default="xbox")
     a = ap.parse_args()
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-sandbox")
     app = QApplication(sys.argv[:1])

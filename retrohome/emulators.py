@@ -97,6 +97,7 @@ class Emulators:
     # ------------------------------------------------------------ setup
     def reload(self):
         self._cache.clear()
+        self.__dict__.pop("_win_index", None)
         self.overrides = {}
         if not self.override_path.exists():
             self._write_template()
@@ -105,6 +106,17 @@ class Emulators:
                 self.overrides = json.load(f)
         except (OSError, ValueError):
             self.overrides = {}
+
+    def set_emulators_dir(self, path):
+        """Remember a manually chosen emulators folder ('' = automatic) in emulators.json."""
+        data = dict(self.overrides)
+        if path:
+            data["emulators_dir"] = str(path)
+        else:
+            data.pop("emulators_dir", None)
+        with open(self.override_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        self.reload()
 
     def _write_template(self):
         tmpl = {
@@ -127,16 +139,84 @@ class Emulators:
         return [d for d in dirs if d.is_dir()]
 
     def windows_emu_roots(self):
+        """(folder, search depth) pairs where Windows emulators may live, most likely first.
+
+        EmuDeck for Windows installs into %USERPROFILE%\\emudeck\\EmulationStation-DE\\Emulators
+        (older versions used %APPDATA%\\EmuDeck\\Emulators)."""
+        home = Path(os.environ.get("USERPROFILE") or Path.home())
         roots = []
+        if self.overrides.get("emulators_dir"):
+            roots.append((Path(self.overrides["emulators_dir"]), 4))
+        roots += [(home / "emudeck" / "EmulationStation-DE" / "Emulators", 3),
+                 (home / "emudeck" / "Emulators", 3),
+                 (home / "emudeck", 4)]
         appdata = os.environ.get("APPDATA")
         if appdata:
-            roots.append(Path(appdata) / "EmuDeck" / "Emulators")
-        roots += [self.emulation_dir.parent / "EmuDeck" / "Emulators", self.emulation_dir / "Emulators",
-                  self.emulation_dir.parent / "Emulators", Path("C:/Emulators")]
+            roots += [(Path(appdata) / "EmuDeck" / "Emulators", 3), (Path(appdata) / "emudeck", 4)]
+        for base in (self.emulation_dir, self.emulation_dir.parent):
+            roots += [(base / "EmulationStation-DE" / "Emulators", 3), (base / "EmuDeck" / "Emulators", 3),
+                      (base / "Emulators", 3), (base / "tools", 3)]
+        roots.append((Path("C:/Emulators"), 3))
         for pf in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
             if os.environ.get(pf):
-                roots.append(Path(os.environ[pf]))
-        return [r for r in roots if r.is_dir()]
+                roots.append((Path(os.environ[pf]), 2))
+        seen, out = set(), []
+        for r, depth in roots:
+            try:
+                key = str(r.resolve()).lower()
+                if r.is_dir() and key not in seen:
+                    seen.add(key)
+                    out.append((r, depth))
+            except OSError:
+                pass
+        return out
+
+    def _exe_index(self, root, depth):
+        """All .exe files under root (to `depth` levels), cached: [(lowercase rel parts, Path)]."""
+        cache = self.__dict__.setdefault("_win_index", {})
+        key = (str(root), depth)
+        if key in cache:
+            return cache[key]
+        found = []
+
+        def walk(d, level):
+            try:
+                entries = list(os.scandir(d))
+            except OSError:
+                return
+            for e in entries:
+                try:
+                    if e.is_dir():
+                        if level < depth and not e.name.startswith(".") and e.name.lower() not in (
+                                "windowsapps", "common files", "windows defender", "microsoft", "packages"):
+                            walk(e.path, level + 1)
+                    elif e.name.lower().endswith(".exe"):
+                        p = Path(e.path)
+                        found.append(([x.lower() for x in p.relative_to(root).parts], p))
+                except OSError:
+                    continue
+        walk(root, 1)
+        cache[key] = found
+        return found
+
+    def _find_windows_exe(self, emu_id, patterns):
+        """Match patterns like 'PCSX2*/pcsx2-qt*.exe' at any depth (folder names may differ)."""
+        import fnmatch
+        for root, depth in self.windows_emu_roots():
+            index = self._exe_index(root, depth)
+            for pat in patterns:
+                dir_pat, _, exe_pat = pat.lower().rpartition("/")
+                for parts, path in index:
+                    if not fnmatch.fnmatch(parts[-1], exe_pat):
+                        continue
+                    folders = parts[:-1]
+                    if emu_id == "dolphin" and any("primehack" in f for f in folders):
+                        continue
+                    loose = self.overrides.get("emulators_dir") and Path(self.overrides["emulators_dir"]) == root
+                    if dir_pat and not loose and not any(fnmatch.fnmatch(f, dir_pat) for f in folders):
+                        continue
+                    return path
+        return None
 
     def find_launcher_script(self, keywords, exclude=()):
         exts = (".sh",) if not IS_WINDOWS else (".bat", ".cmd", ".ps1")
@@ -165,14 +245,9 @@ class Emulators:
             cmd = list(ov)
         elif spec:
             if IS_WINDOWS:
-                for root in self.windows_emu_roots():
-                    for pat in spec["win"]:
-                        hits = glob.glob(str(root / pat))
-                        if hits:
-                            cmd = [hits[0]]
-                            break
-                    if cmd:
-                        break
+                hit = self._find_windows_exe(emu_id, spec["win"])
+                if hit:
+                    cmd = [str(hit)]
                 if not cmd:
                     for b in spec["bin"]:
                         w = shutil.which(b)
@@ -193,8 +268,11 @@ class Emulators:
                             cmd = [w]
                             break
                     if not cmd:
-                        # AppImages that EmuDeck drops into ~/Applications
-                        for app_dir in (Path.home() / "Applications", self.emulation_dir.parent / "Applications"):
+                        # AppImages that EmuDeck drops into ~/Applications (or a folder chosen in Settings)
+                        app_dirs = [Path.home() / "Applications", self.emulation_dir.parent / "Applications"]
+                        if self.overrides.get("emulators_dir"):
+                            app_dirs.insert(0, Path(self.overrides["emulators_dir"]))
+                        for app_dir in app_dirs:
                             for kw in spec["kw"]:
                                 hits = [h for h in glob.glob(str(app_dir / "*.AppImage")) if kw in Path(h).name.lower()]
                                 if hits:
@@ -279,8 +357,9 @@ class Emulators:
             raise LaunchError(f"No emulator is set up for {system.name}. "
                               f"Add one for \"{system.folder}\" in emulators.json.")
         raise LaunchError("Couldn't find " + ", ".join(dict.fromkeys(tried)) +
-                          f" for {system.name}. RetroHome launches games through EmuDeck: install EmuDeck "
-                          f"(emudeck.com) and include this emulator in its setup.")
+                          f" for {system.name}. RetroHome launches games through EmuDeck: make sure EmuDeck "
+                          f"(emudeck.com) installed this emulator. If it did, choose its emulators folder in "
+                          f"Settings > Emulators folder.")
 
     def _native_command(self, game):
         p = str(game.path)

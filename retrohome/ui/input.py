@@ -47,12 +47,32 @@ class Input:
         self.cur_dir = None
         self.text_mode = False
         self.last_device = "keyboard"
+        self.pad_family = "xbox"        # family of the controller used most recently (for button labels)
+        self.families = {}              # joystick instance id -> family
         self.enabled = True
         for i in range(pygame.joystick.get_count()):
             self._add_device(i)
 
     # ------------------------------------------------------------ devices
+    def _note_family(self, idx):
+        from ..padstyle import family_from_name
+        name = ""
+        try:
+            name = self.ctrl.name_forindex(idx) if self.ctrl else ""
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            j = pygame.joystick.Joystick(idx)
+            name = name or j.get_name()
+            fam = family_from_name(name)
+            self.families[j.get_instance_id()] = fam
+            self.pad_family = fam
+        except Exception:  # noqa: BLE001
+            if name:
+                self.pad_family = family_from_name(name)
+
     def _add_device(self, idx):
+        self._note_family(idx)
         try:
             if self.ctrl and self.ctrl.is_controller(idx):
                 if idx not in self.controllers:
@@ -114,6 +134,7 @@ class Input:
         # ---- SDL GameController (standardised layout) ----
         elif self.ctrl and t == getattr(pygame, "CONTROLLERBUTTONDOWN", -1):
             self.last_device = "pad"
+            self.pad_family = self.families.get(getattr(event, "instance_id", None), self.pad_family)
             a = self._ctrl_button(event.button)
             if a in DIRS:
                 self._press_dir(("cb", a), a, out)
@@ -133,6 +154,7 @@ class Input:
         # ---- raw joystick fallback (ignored for devices opened as controllers) ----
         elif t == pygame.JOYBUTTONDOWN and event.instance_id in self.joysticks:
             self.last_device = "pad"
+            self.pad_family = self.families.get(event.instance_id, self.pad_family)
             a = JOY_BUTTONS.get(event.button)
             if a:
                 out.append(a)
@@ -158,6 +180,7 @@ class Input:
             P.CONTROLLER_BUTTON_X: "x", P.CONTROLLER_BUTTON_Y: "y",
             P.CONTROLLER_BUTTON_LEFTSHOULDER: "lb", P.CONTROLLER_BUTTON_RIGHTSHOULDER: "rb",
             P.CONTROLLER_BUTTON_START: "start", P.CONTROLLER_BUTTON_BACK: "select",
+            P.CONTROLLER_BUTTON_GUIDE: "guide",
             P.CONTROLLER_BUTTON_DPAD_UP: UP, P.CONTROLLER_BUTTON_DPAD_DOWN: DOWN,
             P.CONTROLLER_BUTTON_DPAD_LEFT: LEFT, P.CONTROLLER_BUTTON_DPAD_RIGHT: RIGHT,
         }

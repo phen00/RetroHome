@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5 — 2026-10-22
+- **Automatic updates:** RetroHome now checks GitHub for new versions at start-up, shows what's
+  changed and can download and install the update itself (RetroHome restarts; settings and
+  progress are kept). Check any time in **Settings → Check for updates**, or turn automatic checks
+  off in Settings
+- At most three notifications are shown at once
+
 ## 1.0.4 — 2026-10-22
 - If an emulator's folder exists but the program is missing (for example when EmuDeck's RetroArch
   download didn't finish), RetroHome now says so and tells you to reinstall it in EmuDeck, instead

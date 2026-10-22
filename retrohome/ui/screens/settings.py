@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 
+from ... import __version__
 from .menu import Menu
 
 
@@ -46,6 +47,9 @@ class Settings(Menu):
             ("Emulator setup", "Check which consoles are ready to play", self._emus),
             ("Emulators folder", (app.emus.overrides.get("emulators_dir") if app.emus else "") or
              "Automatic (finds EmuDeck's emulators)", self._emus_dir),
+            ("Check for updates", f"You have RetroHome {__version__}", self._check_updates),
+            ("Automatic update checks", "On - checks GitHub at start-up" if cfg["auto_update_check"] else "Off",
+             self._toggle_updates),
             ("Quit RetroHome", "", self._quit),
         ]
         self.set_items(items)
@@ -106,6 +110,15 @@ class Settings(Menu):
     def _toggle_all(self):
         self.app.config["show_all_games"] = not self.app.config["show_all_games"]
         self.app.library.version += 1
+        self._build()
+
+    def _check_updates(self):
+        from .update import check_for_updates
+        self.app.toast("Checking for updates…")
+        check_for_updates(self.app, manual=True)
+
+    def _toggle_updates(self):
+        self.app.config["auto_update_check"] = not self.app.config["auto_update_check"]
         self._build()
 
     def _toggle_shots(self):

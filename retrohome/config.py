@@ -20,7 +20,9 @@ GLOBAL_DEFAULTS = {
     "ask_user_on_start": True,
     "active_profile": "",
     "screenshot_backgrounds": True,
-    "show_all_games": False,      # False: only games with a RetroAchievements set (when signed in)
+    "show_all_games": False,
+    "auto_update_check": True,    # look for a new release on GitHub at start-up
+    "skipped_update": "",      # False: only games with a RetroAchievements set (when signed in)
 }
 PROFILE_DEFAULTS = {
     "name": "Player",

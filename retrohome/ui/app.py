@@ -169,6 +169,8 @@ class App:
         self.emus = None
         self.artwork = None
         self.playing = None
+        self.pending_update = None  # release info when a newer version is on GitHub
+        self._update_checked = False
         self.online = None        # accounts.OnlineClient for the signed-in user, if any
         self.online_status = ""
 
@@ -265,7 +267,9 @@ class App:
         return self.stack[-1] if self.stack else None
 
     def toast(self, msg, secs=3.5):
+        self.toasts = [t for t in self.toasts if t[0] != msg]    # no duplicates
         self.toasts.append([msg, secs])
+        self.toasts = self.toasts[-3:]                          # at most three on screen
 
     def dialog(self, title, body="", options=(("OK", None),), on_cancel=None):
         self.push(Dialog(self, title, body, options, on_cancel))
@@ -285,6 +289,12 @@ class App:
             self.ra.match_library(on_match=self._on_ra_match)
             self.ra.refresh(force=True)
         self.library.scan(on_done=scanned)
+        if not self._update_checked:
+            self._update_checked = True
+            from ..updater import should_auto_check
+            if should_auto_check(self.config):
+                from .screens.update import check_for_updates
+                check_for_updates(self)
 
     @property
     def only_ra(self):
@@ -544,6 +554,13 @@ class App:
         pygame.quit()
 
     def _maybe_celebrate(self):
+        if self.pending_update and not self.playing:
+            from .screens.home import Home
+            if isinstance(self.top, Home):
+                from .screens.update import UpdatePrompt
+                info, self.pending_update = self.pending_update, None
+                self.push(UpdatePrompt(self, info))
+                return
         if not self.ra.events or self.playing:
             return
         from .screens.home import Home

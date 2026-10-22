@@ -216,6 +216,16 @@ badges of what's next and the next achievement's description; plus tracker cards
 recently unlocked achievements and games you're partway through. Progress refreshes automatically
 when you close a game.
 
+## Updates
+
+From 1.0.5, RetroHome checks GitHub for a new release when it starts (at most every 6 hours) and
+offers **Update now / Later / Skip this version**, showing that version's changes. *Update now*
+downloads the right file for your system, closes RetroHome, swaps in the new files and reopens it.
+Settings, users and caches are stored elsewhere, so nothing is lost. *Settings → Check for
+updates* checks on demand; *Automatic update checks* turns the start-up check off. (Self-update
+works for the release downloads; if RetroHome's folder isn't writable, e.g. inside Program Files,
+it tells you to download the update instead.)
+
 ## Files
 
 * Settings: `%APPDATA%\RetroHome\config.json` or `~/.config/retrohome/config.json`

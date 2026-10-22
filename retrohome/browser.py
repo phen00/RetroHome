@@ -162,7 +162,7 @@ class Browser(QMainWindow):
     def __init__(self, a):
         super().__init__()
         self.args = a
-        self.system = get_system(a.folder)
+        self.system = get_system(a.folder) if a.folder else None   # None: plain page, no ROM downloads
         self.report_path = Path(a.report)
         self.results = []
         self.jobs = queue.Queue()
@@ -198,7 +198,7 @@ class Browser(QMainWindow):
         act("◀ Back", self.view.back, "Alt+Left")
         act("Forward ▶", self.view.forward, "Alt+Right")
         act("⟳", self.view.reload, "F5")
-        act("Game page", lambda: self.go(a.home or a.url))
+        act("Game page" if a.folder else "Start page", lambda: self.go(a.home or a.url))
         if a.hashes:
             act("Supported files", lambda: self.go(a.hashes))
         self.address = QLineEdit()
@@ -210,7 +210,8 @@ class Browser(QMainWindow):
         bar.setObjectName("bar")
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(12, 6, 12, 6)
-        self.where = QLabel(f"Downloads go to  roms/{a.folder}  ({self.system.name})")
+        self.where = QLabel(f"Downloads go to  roms/{a.folder}  ({self.system.name})" if self.system else
+                            "Sign in to RetroAchievements here, then press Follow on a player's page")
         self.status = QLabel("")
         self.status.setObjectName("status")
         self.dl_bar = QProgressBar()
@@ -264,6 +265,10 @@ class Browser(QMainWindow):
 
     # ------------------------------------------------------------ downloads
     def on_download(self, item: QWebEngineDownloadRequest):
+        if not self.system:
+            item.cancel()
+            self.status.setText("Downloads only work from a game's page in the RA Library")
+            return
         folder = Path(self.args.rom_dir) / ".rh-downloads"
         folder.mkdir(parents=True, exist_ok=True)
         item.setDownloadDirectory(str(folder))
@@ -389,7 +394,7 @@ def main():
     ap.add_argument("--home", default="")
     ap.add_argument("--hashes", default="")
     ap.add_argument("--rom-dir", required=True)
-    ap.add_argument("--folder", required=True)
+    ap.add_argument("--folder", default="")
     ap.add_argument("--report", required=True)
     ap.add_argument("--title", default="")
     ap.add_argument("--fullscreen", action="store_true")

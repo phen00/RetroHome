@@ -40,6 +40,8 @@ class Settings(Menu):
             ("Show games without achievements", ("On - every game in your roms folder" if cfg["show_all_games"]
              else "Off - only games with a RetroAchievements set") +
              ("" if app.ra.enabled else " (applies once you sign in to RetroAchievements)"), self._toggle_all),
+            ("Friend notifications", ("On - tells you when someone you follow starts playing" if
+                                      cfg["friend_alerts"] else "Off"), self._toggle_friends),
             ("Screenshot backgrounds", "On" if cfg["screenshot_backgrounds"] else "Off", self._toggle_shots),
             ("Ask who's playing at start-up", "On" if cfg["ask_user_on_start"] else "Off", self._toggle_ask),
             ("Browser for the RA Library", "Installed - A to reinstall/update" if self._browser_ok()
@@ -119,6 +121,10 @@ class Settings(Menu):
 
     def _toggle_updates(self):
         self.app.config["auto_update_check"] = not self.app.config["auto_update_check"]
+        self._build()
+
+    def _toggle_friends(self):
+        self.app.config["friend_alerts"] = not self.app.config["friend_alerts"]
         self._build()
 
     def _toggle_shots(self):

@@ -280,13 +280,30 @@ def open_browser(app, game_entry, folder, console_name):
                    [("Install", lambda: app.push(InstallBrowser(app, lambda: open_browser(
                        app, game_entry, folder, console_name)))), ("Not now", None)])
         return
+    _start_browser(app, ["--url", GAME_PAGE.format(id=gid), "--home", GAME_PAGE.format(id=gid),
+                         "--hashes", HASH_PAGE.format(id=gid), "--folder", folder],
+                   game_entry.get("Title", ""), folder)
+
+
+def open_page(app, url, title):
+    """Open any web page (e.g. a RetroAchievements profile) in the built-in browser; no ROM downloads."""
+    if not browser_available():
+        if FROZEN:
+            app.dialog("Browser not included", "This copy of RetroHome was built without the web browser. "
+                       f"Open {url} in your own browser instead.")
+        else:
+            app.dialog("Install the RetroHome browser?", "This needs the built-in browser (about 150-200 MB). "
+                       "Install it now?", [("Install", lambda: app.push(InstallBrowser(
+                           app, lambda: open_page(app, url, title)))), ("Not now", None)])
+        return
+    _start_browser(app, ["--url", url, "--home", url], title, "")
+
+
+def _start_browser(app, args, title, folder):
     report = cache_dir() / f"browser-report-{os.getpid()}-{int(time.time())}.json"
     root = Path(__file__).resolve().parents[3]   # project folder containing the retrohome package
     launcher = [sys.executable, "--browser"] if FROZEN else [sys.executable, "-m", "retrohome.browser"]
-    cmd = [*launcher, "--url", GAME_PAGE.format(id=gid),
-           "--home", GAME_PAGE.format(id=gid), "--hashes", HASH_PAGE.format(id=gid),
-           "--rom-dir", str(app.config["rom_dir"]), "--folder", folder, "--report", str(report),
-           "--title", game_entry.get("Title", "")]
+    cmd = [*launcher, *args, "--rom-dir", str(app.config["rom_dir"]), "--report", str(report), "--title", title]
     if app.config["fullscreen"]:
         cmd.append("--fullscreen")
     cmd += ["--pad-family", app.input.pad_family]
@@ -297,7 +314,7 @@ def open_browser(app, game_entry, folder, console_name):
     except OSError as e:
         app.dialog("Couldn't open the browser", str(e))
         return
-    app.push(BrowserOpen(app, proc, report, game_entry.get("Title", ""), folder))
+    app.push(BrowserOpen(app, proc, report, title, folder))
 
 
 class BrowserOpen(Screen):
@@ -355,6 +372,8 @@ class BrowserOpen(Screen):
         app.pop()
         added = sum(len(r.get("files", [])) for r in self.results if r.get("status") == "ok")
         errors = [r["message"] for r in self.results if r.get("status") == "error"]
+        if not self.folder:     # a profile page: pick up anyone just followed
+            app.friends.refresh(force=True)
         if added:
             app.toast(f"Added {added} file(s) to {self.folder} - rescanning")
 
@@ -370,8 +389,9 @@ class BrowserOpen(Screen):
     def draw(self, s):
         gfx.blit_text(s, "Browser open", (gfx.W // 2, gfx.H // 2 - 80), 22, gfx.TEXT_DIM, anchor="center")
         gfx.blit_text(s, self.title, (gfx.W // 2, gfx.H // 2 - 36), 36, gfx.TEXT, True, max_w=1100, anchor="center")
-        gfx.blit_text(s, f"Downloads are unpacked into roms/{get_system(self.folder).folder} automatically.",
-                      (gfx.W // 2, gfx.H // 2 + 10), 18, gfx.TEXT_DIM, anchor="center")
+        sub = (f"Downloads are unpacked into roms/{get_system(self.folder).folder} automatically." if self.folder
+               else "Press Follow on their page to add them as a friend.")
+        gfx.blit_text(s, sub, (gfx.W // 2, gfx.H // 2 + 10), 18, gfx.TEXT_DIM, anchor="center")
         y = gfx.H // 2 + 60
         for r in self.results[-5:]:
             col = gfx.GREEN if r.get("status") == "ok" else gfx.GOLD

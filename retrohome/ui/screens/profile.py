@@ -7,7 +7,8 @@ from .. import gfx
 from ..app import Screen
 from .common import ago, draw_icon_slot, fmt_int, tile_surface, url_image
 
-TABS = ["Overview", "Played games", "Trophy case"]
+TABS = ["Overview", "Played games", "Trophy case", "Friends"]
+FRIENDS = 3
 RECENT = 5
 
 
@@ -75,7 +76,51 @@ class Profile(Screen):
         return self._recent() if self.tab == 0 else self._played() if self.tab == 1 else []
 
     def _list_len(self):
+        if self.tab == FRIENDS:
+            return len(self.app.friends.list) + 1     # first row: "Add a friend"
         return len(self._rows()) if self.tab in (0, 1) else len(self._trophies())
+
+    def update(self, dt):
+        if self.tab == FRIENDS:
+            self.app.friends.refresh(every=60)      # keep "playing now" fresh while you look
+
+    # ------------------------------------------------------------ friends
+    def _add_friend(self):
+        if not self.app.ra.enabled:
+            self.app.toast("Sign in to RetroAchievements first (Settings)")
+            return
+        from .keyboard import Keyboard
+
+        def entered(name):
+            name = (name or "").strip()
+            if name:
+                from urllib.parse import quote
+                from .ralib import open_page
+                open_page(self.app, f"https://retroachievements.org/user/{quote(name)}", f"Add {name}")
+        self.app.push(Keyboard(self.app, "Friend's RetroAchievements username", "", entered,
+                               hint="Their page opens - press Follow there (sign in to RA the first time)"))
+
+    def _friend_action(self, a):
+        if self.sel == 0:
+            if a == "a":
+                self._add_friend()
+            return
+        fl = self.app.friends.list
+        if self.sel - 1 >= len(fl):
+            return
+        f = fl[self.sel - 1]
+        if not f["game_id"]:
+            return
+        if a == "a":
+            from .achievements import Achievements
+            self.app.push(Achievements.for_ra_game(self.app, {"GameID": f["game_id"], "GameTitle": f["game"],
+                                                              "ConsoleName": f["console"], "ImageIcon": ""}))
+        elif a == "x":
+            game = next((g for g in self.app.library.all if g.ra_game_id == f["game_id"]), None)
+            if game:
+                self.app.launch(game)
+            else:
+                self.app.toast(f"{f['game']} isn't in your library")
 
     # ------------------------------------------------------------ input
     def on_action(self, a):
@@ -84,12 +129,18 @@ class Profile(Screen):
         elif a in ("lb", "rb", "left", "right"):
             self.tab = (self.tab + (1 if a in ("rb", "right") else -1)) % len(TABS)
             self.sel = self.scroll = 0
+            if self.tab == FRIENDS:
+                self.app.friends.refresh(every=30)
         elif a in ("up", "down"):
             n = self._list_len()
             self.sel = max(0, min(max(0, n - 1), self.sel + (1 if a == "down" else -1)))
         elif a == "y":
             self.app.ra.refresh(force=True)
+            if self.tab == FRIENDS:
+                self.app.friends.refresh(force=True)
             self.app.toast("Refreshing…")
+        elif self.tab == FRIENDS and a in ("a", "x"):
+            self._friend_action(a)
         elif a in ("a", "x") and self.tab in (0, 1):
             rows = self._rows()
             if not rows:
@@ -131,7 +182,7 @@ class Profile(Screen):
             gfx.rrect(s, gfx.TEXT if on else (255, 255, 255, 28), r, 19)
             gfx.blit_text(s, t, r.center, 17, (10, 14, 30) if on else gfx.TEXT, True, anchor="center")
             tx += w + 10
-        [self._overview, self._played_tab, self._trophy_case][self.tab](s)
+        [self._overview, self._played_tab, self._trophy_case, self._friends_tab][self.tab](s)
 
     # ------------------------------------------------------------ overview
     def _shelf(self):
@@ -340,9 +391,77 @@ class Profile(Screen):
             gfx.blit_text(s, info["name"], (r.right - 176, r.y + 14), 19, info["color"], True)
             gfx.blit_text(s, str(date)[:10], (r.right - 176, r.y + 40), 14, gfx.TEXT_FAINT)
 
+    def _friends_tab(self, s):
+        fr = self.app.friends
+        n_play = len(fr.playing)
+        if not self.app.ra.enabled:
+            gfx.blit_text(s, "Sign in to RetroAchievements in Settings to see your friends.", (60, 180), 20,
+                          gfx.TEXT_FAINT)
+            return
+        status = ("Loading…" if fr.loading and not fr.loaded else fr.error if fr.error and not fr.loaded else
+                  f"{len(fr.list)} following  ·  {n_play} playing now")
+        gfx.blit_text(s, status, (60, 160), 16, gfx.RED if fr.error and not fr.loaded else gfx.TEXT_DIM)
+        gfx.blit_text(s, "Friends are the people you follow on RetroAchievements", (gfx.W - 60, 160), 14,
+                      gfx.TEXT_FAINT, anchor="topright")
+        y0, row_h = 192, 84
+        for i in self._scroll_rows(len(fr.list) + 1, y0, row_h):
+            r = pygame.Rect(60, y0 + (i - self.scroll) * row_h, gfx.W - 120, row_h - 10)
+            sel = i == self.sel
+            gfx.rrect(s, gfx.PANEL_HI if sel else gfx.PANEL, r, 14)
+            if sel:
+                gfx.glow_border(s, r, 14, self.app.t)
+            if i == 0:
+                gfx.rrect(s, (255, 255, 255, 24), (r.x + 9, r.y + 9, 56, 56), 28)
+                gfx.blit_text(s, "+", (r.x + 37, r.y + 35), 34, gfx.TEXT, True, anchor="center")
+                gfx.blit_text(s, "Add a friend", (r.x + 84, r.y + 12), 20, gfx.TEXT, True)
+                gfx.blit_text(s, "Type their RetroAchievements username, then press Follow on their page",
+                              (r.x + 84, r.y + 40), 15, gfx.TEXT_DIM, max_w=r.w - 110)
+                continue
+            self._friend_row(s, r, fr.list[i - 1])
+        if fr.loaded and not fr.list:
+            gfx.blit_text(s, "You're not following anyone yet.", (60, y0 + row_h + 20), 18, gfx.TEXT_FAINT)
+
+    def _friend_row(self, s, r, f):
+        av = url_image(self.app, f["pic"], 56, circle=True)
+        draw_icon_slot(s, (r.x + 9, r.y + 9, 56, 56), av, 28)
+        if f["playing"]:
+            gfx.draw.circle(s, (12, 18, 34), (r.x + 58, r.y + 58), 10)
+            gfx.draw.circle(s, gfx.GREEN, (r.x + 58, r.y + 58), 7)
+        tx = r.x + 84
+        icon_w = 64 if f["game"] else 0
+        name_w = gfx.blit_text(s, f["user"], (tx, r.y + 10), 20, gfx.TEXT, True, max_w=360).w
+        x = tx + name_w + 12
+        if f["follows_me"]:
+            tag = "Friends"
+            tw = gfx.measure(tag, 12, True)[0] + 16
+            gfx.rrect(s, (255, 255, 255, 26), (x, r.y + 13, tw, 20), 10)
+            gfx.blit_text(s, tag, (x + tw / 2, r.y + 23), 12, gfx.TEXT_DIM, True, anchor="center")
+        gfx.blit_text(s, f"{fmt_int(f['points'])} pts", (r.right - 24 - icon_w - (14 if icon_w else 0), r.y + 12), 15,
+                      gfx.GOLD, True, anchor="topright")
+        line_w = r.right - tx - icon_w - 40
+        if f["playing"]:
+            what = f"Playing {f['game']}" + (f"  ·  {f['console']}" if f["console"] else "") if f["game"] else "Playing now"
+            gfx.blit_text(s, what, (tx, r.y + 38), 15, gfx.GREEN, True, max_w=line_w)
+            if f["presence"] and f["presence"] != f["game"]:
+                gfx.blit_text(s, f["presence"], (tx, r.y + 56), 13, gfx.TEXT_DIM, max_w=line_w)
+        elif f["game"]:
+            when = f"  ·  {ago(f['last'])}" if f["last"] else ""
+            gfx.blit_text(s, f"Last played {f['game']}{when}", (tx, r.y + 40), 15, gfx.TEXT_DIM, max_w=line_w)
+        else:
+            gfx.blit_text(s, "Hasn't played anything yet", (tx, r.y + 40), 15, gfx.TEXT_FAINT)
+        if f["game"]:
+            icon = url_image(self.app, f["icon"], 56, radius=8)
+            draw_icon_slot(s, (r.right - 9 - 56, r.y + 9, 56, 56), icon, 8)
+
     def hints(self):
         h = []
-        if self.tab in (0, 1) and self._rows():
+        if self.tab == FRIENDS:
+            fl = self.app.friends.list
+            if self.sel == 0:
+                h = [("a", "Add friend")]
+            elif self.sel - 1 < len(fl) and fl[self.sel - 1]["game_id"]:
+                h = [("a", "Their game"), ("x", "Play it")]
+        elif self.tab in (0, 1) and self._rows():
             h = [("a", "Achievements"), ("x", "Play")]
         elif self.tab == 2:
             h = [("a", "Achievements")]

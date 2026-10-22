@@ -5,6 +5,10 @@
   award is gone; games you'd already beaten count as Platinum
 - Your profile's Overview now shows your RetroAchievements points, softcore points, RetroPoints,
   achievements unlocked and site rank
+- **Friends:** a new Friends tab on your profile shows the people you follow on RetroAchievements
+  and what they're playing right now (or last played). **Add a friend** opens their RA page so you
+  can follow them. A on a friend opens their game's achievements, X plays it if you have it
+- RetroHome tells you when a friend starts playing (turn off in **Settings → Friend notifications**)
 
 ## 1.0.5 — 2026-10-22
 - **Automatic updates:** RetroHome now checks GitHub for new versions at start-up, shows what's

@@ -93,6 +93,19 @@ game RetroHome has timed; left/right or LB/RB switch
 tabs, and A on a trophy opens that game's achievement list. In the achievement tracker, A opens
 a game's achievement list (even for games not in your library) and X jumps to it in your library.
 
+## Friends
+
+Friends are the people you follow on RetroAchievements; there is no separate RetroHome friends
+list or server. The **Friends** tab on your profile lists them with what they're playing right
+now, using RetroAchievements rich presence (green dot = updated in the last few minutes), or the
+game they played last. **Add a friend** asks for their RA username and opens their profile in
+the built-in browser: sign in to RetroAchievements there once, then press **Follow**. Friends who
+follow you back get a *Friends* tag.
+
+While RetroHome is open (and you're not in a game) it checks every few minutes and shows a
+notification when a friend starts playing; turn this off in **Settings → Friend notifications**.
+Friends only show as playing when their emulator is connected to RetroAchievements.
+
 ## Window size and sharpness
 
 RetroHome draws everything at your screen's real resolution and fits the layout to its shape:

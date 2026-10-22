@@ -121,6 +121,23 @@ class RetroAchievements:
             return {}
         return {"Rank": res.get("Rank"), "TotalRanked": res.get("TotalRanked")}
 
+    def following(self, limit=500) -> list:
+        """Everyone this user follows on RetroAchievements: [{"User", "ULID", "Points", "IsFollowingMe"...}]."""
+        out, offset = [], 0
+        while len(out) < limit:
+            res = self._call("API_GetUsersIFollow.php", c=min(500, limit - len(out)), o=offset)
+            page = res.get("Results", []) if isinstance(res, dict) else []
+            out += page
+            offset += len(page)
+            if not page or offset >= int((res or {}).get("Total") or 0):
+                break
+        return out
+
+    def summary(self, user: str) -> dict:
+        """A user's summary: last game, rich presence and when it was last updated."""
+        res = self._call("API_GetUserSummary.php", u=user, g=1, a=0)
+        return res if isinstance(res, dict) else {}
+
     def recent_achievements(self, minutes=60 * 24 * 30) -> list:
         res = self._call("API_GetUserRecentAchievements.php", u=self.user, m=minutes)
         return res if isinstance(res, list) else []

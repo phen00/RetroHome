@@ -166,6 +166,8 @@ class App:
         self.library = Library(self.config, self.tasks)
         self.ra = RAState(self.config, self.tasks, self.library)
         self.ra.on_progress = lambda: self.sync_online()
+        from ..friends import Friends
+        self.friends = Friends(self.ra, self.tasks)
         self.emus = None
         self.artwork = None
         self.playing = None
@@ -540,6 +542,7 @@ class App:
                 except Exception:  # noqa: BLE001
                     traceback.print_exc()
             self._maybe_celebrate()
+            self._watch_friends()
             top = self.top
             if top:
                 try:
@@ -551,6 +554,18 @@ class App:
             self.render(dt)
         self.tasks.shutdown()
         pygame.quit()
+
+    def _watch_friends(self):
+        """Every few minutes, see who started playing (people you follow on RetroAchievements)."""
+        f = self.friends
+        if self.playing or not self.ra.enabled or not self.stack:
+            return
+        if self.config["friend_alerts"]:
+            f.refresh(every=180)
+        while f.started:
+            x = f.started.pop(0)
+            self.toast(f"{x['user']} started playing {x['game']}" if x["game"] else f"{x['user']} is playing",
+                       secs=6)
 
     def _maybe_celebrate(self):
         if self.pending_update and not self.playing:

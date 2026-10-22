@@ -477,6 +477,15 @@ def main():
     else:
         w.resize(1280, 800)
         w.show()
+
+    def shown():
+        w.raise_()                      # come to the front (KDE may otherwise open us behind RetroHome)
+        w.activateWindow()
+        try:                            # tell RetroHome the window is up
+            Path(a.report).with_suffix(".ready").write_text("ready")
+        except OSError:
+            pass
+    QTimer.singleShot(300, shown)
     sys.exit(app.exec())
 
 

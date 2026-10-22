@@ -422,6 +422,31 @@ class App:
             self.top.on_game_closed(game)
         self.sync_online()
 
+    @staticmethod
+    def _in_gamescope():
+        """Steam Deck Gaming Mode: windows are managed by gamescope, so leave ours alone."""
+        return bool(os.environ.get("GAMESCOPE_WAYLAND_DISPLAY")) or "gamescope" in \
+            os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+
+    def minimize_window(self) -> bool:
+        """Minimise while another window (the browser) is in use - a fullscreen RetroHome would
+        otherwise stay on top of it in desktop mode."""
+        if self._in_gamescope():
+            return False
+        try:
+            return bool(pygame.display.iconify())
+        except pygame.error:
+            return False
+
+    def restore_window(self):
+        try:
+            win = (pygame.Window.from_display_module() if hasattr(pygame, "Window")
+                   else __import__("pygame._sdl2.video", fromlist=["Window"]).Window.from_display_module())
+            win.restore()
+            win.focus()
+        except Exception:  # noqa: BLE001
+            self._open_display(bool(self.config["fullscreen"]))
+
     def toggle_fullscreen(self):
         self.config["fullscreen"] = not self.config["fullscreen"]
         self._open_display(self.config["fullscreen"])

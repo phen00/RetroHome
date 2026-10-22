@@ -376,14 +376,23 @@ class BrowserOpen(Screen):
         self.results = []
         self.last_read = 0
         self.closing = False
+        self.ready = False
+        self.minimized = False
 
     @property
     def close_flag(self):
         return self.report.with_suffix(".close")
 
+    @property
+    def ready_flag(self):
+        return self.report.with_suffix(".ready")
+
     def on_action(self, a):
-        # Start / Options / Menu / + or the Home (PS / Xbox) button closes the browser
-        if a in ("start", "guide") and not self.closing:
+        # Start / Options / Menu / + or the Home (PS / Xbox) button closes the browser; so does B here
+        # (RetroHome's own screen), so it can't get stuck if the browser window never shows up
+        if a == "b" and self.ready and not pygame.key.get_focused():
+            return          # B in the browser window is "back a page", not "close"
+        if a in ("start", "guide", "b") and not self.closing:
             self.closing = True
             try:
                 self.close_flag.write_text("close")
@@ -401,6 +410,10 @@ class BrowserOpen(Screen):
         if time.time() - self.last_read > 1:
             self.last_read = time.time()
             self._read()
+            if not self.ready and self.ready_flag.exists():
+                self.ready = True
+                if not self.minimized and not self.closing:
+                    self.minimized = self.app.minimize_window()   # get out of the browser's way
         code = self.proc.poll()
         if code is None and self.safe and not self.app.config["browser_safe_mode"] and \
                 time.time() - self.started > 8:
@@ -416,10 +429,20 @@ class BrowserOpen(Screen):
             except OSError:
                 pass
         if code is None:
-            # the browser closes itself on the flag; if it's stuck, end it
-            if self.closing and time.time() - getattr(self, "close_requested", time.time()) > 150:
+            # the browser closes itself on the flag; if it doesn't, end it
+            waited = time.time() - getattr(self, "close_requested", time.time()) if self.closing else 0
+            if waited > 8:
+                self.proc.kill()
+            elif waited > 4:
                 self.proc.terminate()
             return
+        for f in (self.ready_flag,):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        if self.minimized:
+            self.app.restore_window()
         self._read()
         try:
             self.close_flag.unlink()
@@ -468,13 +491,19 @@ class BrowserOpen(Screen):
             gfx.blit_text(s, r.get("message", ""), (gfx.W // 2, y), 17, col, anchor="center", max_w=1000)
             y += 26
         from ...padstyle import text_label
-        msg = ("Closing the browser…" if self.closing else
-               f"Press {text_label(self.app.input.pad_family, 'start')} on your controller, or close the "
-               "browser window, to come back.")
+        start = text_label(self.app.input.pad_family, 'start')
+        if self.closing:
+            msg = "Closing the browser…"
+        elif not self.ready and time.time() - self.started > 15:
+            msg = "The browser hasn't appeared. Press B to stop it and come back."
+        elif not self.ready:
+            msg = "Opening the browser…"
+        else:
+            msg = f"Press {start} on your controller, or close the browser window, to come back."
         gfx.blit_text(s, msg, (gfx.W // 2, gfx.H - 90), 16, gfx.TEXT_FAINT, anchor="center")
 
     def hints(self):
-        return []
+        return [] if self.closing else [("b", "Close browser")]
 
 
 class InstallBrowser(Screen):

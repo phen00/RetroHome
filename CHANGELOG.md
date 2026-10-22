@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.13 — 2026-10-22
+- Fixed the built-in browser opening behind RetroHome in Steam Deck Desktop Mode: RetroHome now
+  steps out of the way while the browser is open and comes back when it closes
+- B on RetroHome's "Browser open" screen closes the browser, so it can't get stuck. If the browser
+  hasn't appeared after a while, RetroHome says so
+
 ## 1.0.12 — 2026-10-22
 - Fixed updates not installing on the Steam Deck when RetroHome is launched from Steam: the
   update now installs while RetroHome is still open and it restarts straight into the new version

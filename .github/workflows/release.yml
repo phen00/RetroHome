@@ -1,0 +1,65 @@
+# Builds RetroHome for Windows and Linux/Steam Deck on GitHub's servers.
+# Push a tag like v1.0.0 (or press "Run workflow" on the Actions tab) and the finished
+# .zip / .tar.gz appear under Actions > this run > Artifacts, and on the Releases page for tags.
+name: Build release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: ubuntu-22.04          # older glibc = runs on SteamOS and most distros
+            name: linux-steamdeck
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        env:
+          CI: "1"
+        run: packaging\build_windows.bat
+      - name: Build (Linux / Steam Deck)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-keysyms1 libxcb-shape0 libnss3 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libasound2
+          bash packaging/build_linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RetroHome-${{ matrix.name }}
+          path: |
+            dist/*.zip
+            dist/*.rar
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          body_path: packaging/RELEASE_NOTES.md

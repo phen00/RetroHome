@@ -160,19 +160,30 @@ class Settings(Menu):
         if emus is None:
             return
         emus.reload()
-        found, missing = [], []
+        from ...emulators import STANDALONE
+        items = []
+        found = []
+        for emu_id, spec in STANDALONE.items():
+            cmd = emus.find_standalone(emu_id)
+            if cmd:
+                found.append(spec["name"])
+                where = cmd[1] if cmd[0] in ("bash", "flatpak") and len(cmd) > 1 else cmd[0]
+                items.append((f"✓ {spec['name']}", str(where), None))
         systems = {g.system.folder: g for g in self.app.library.all}
+        missing = []
         for folder, g in sorted(systems.items()):
             try:
-                _, label = emus.resolve(g)
-                found.append(f"{g.system.label}: {label}")
-            except Exception:  # noqa: BLE001
-                missing.append(g.system.label)
-        body = (f"Ready: {', '.join(found) if found else 'none'}. " +
-                (f"Missing emulator for: {', '.join(missing)}. If EmuDeck installed these, choose its "
-                 f"emulators folder in Settings > Emulators folder. " if missing else "") +
-                f"Advanced overrides: {emus.override_path}")
-        self.app.dialog("Emulators", body)
+                emus.resolve(g)
+            except Exception as e:  # noqa: BLE001
+                missing.append((f"✗ {g.system.name}", str(e), None))
+        items = missing + items
+        for line in emus.diagnostics():
+            items.append(("Searched", line, None))
+        sub = (f"Found {len(found)} emulators" + (f" · {len(missing)} of your consoles can't launch yet" if missing
+                                                 else (" · all your consoles are ready" if systems else "")) +
+               ". If EmuDeck's emulators aren't found, choose their folder in Settings > Emulators folder.")
+        from .menu import Menu
+        self.app.push(Menu(self.app, "Emulator setup", sub, items, on_back=self.app.pop))
 
     def _emus_dir(self):
         emus = self.app.emus

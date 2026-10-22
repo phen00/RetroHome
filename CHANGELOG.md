@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3 — 2026-10-22
+- Emulators are now found through EmuDeck's own launcher scripts, so RetroHome launches games
+  wherever EmuDeck installed them
+- **Settings → Emulator setup** now lists every emulator found, which consoles can't launch yet
+  and why, and where RetroHome looked
+
 ## 1.0.2 — 2026-10-22
 - Fixed games not launching with recent EmuDeck versions on Windows ("Couldn't find RetroArch…"):
   RetroHome now finds emulators in EmuDeck's current install folder

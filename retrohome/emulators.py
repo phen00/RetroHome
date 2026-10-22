@@ -17,6 +17,7 @@ Placeholders: {rom} full path, {romname} file name without extension, {romdir} f
 import glob
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -98,6 +99,7 @@ class Emulators:
     def reload(self):
         self._cache.clear()
         self.__dict__.pop("_win_index", None)
+        self.__dict__.pop("_ps1_paths", None)
         self.overrides = {}
         if not self.override_path.exists():
             self._write_template()
@@ -136,7 +138,18 @@ class Emulators:
     # ------------------------------------------------------------ discovery
     def launcher_dirs(self):
         dirs = [self.emulation_dir / "tools" / "launchers", Path.home() / "Emulation" / "tools" / "launchers"]
-        return [d for d in dirs if d.is_dir()]
+        if IS_WINDOWS:
+            dirs += [Path("C:/Emulation/tools/launchers")]
+        out, seen = [], set()
+        for d in dirs:
+            try:
+                key = str(d.resolve()).lower()
+            except OSError:
+                continue
+            if d.is_dir() and key not in seen:
+                seen.add(key)
+                out.append(d)
+        return out
 
     def windows_emu_roots(self):
         """(folder, search depth) pairs where Windows emulators may live, most likely first.
@@ -199,6 +212,73 @@ class Emulators:
         cache[key] = found
         return found
 
+    def _windows_launcher_paths(self):
+        """EmuDeck for Windows writes Emulation\\tools\\launchers\\<emu>.ps1 containing
+        $emulatorFile = "...\\retroarch.exe". Read those: they say exactly where EmuDeck put each one."""
+        cache = self.__dict__.get("_ps1_paths")
+        if cache is not None:
+            return cache
+        out = {}
+        env = {k.lower(): v for k, v in os.environ.items()}
+        for d in self.launcher_dirs():
+            try:
+                files = [f for f in d.iterdir() if f.suffix.lower() == ".ps1"]
+            except OSError:
+                continue
+            for f in files:
+                try:
+                    text = f.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                m = re.search(r'\$emulatorFile\s*=\s*["\']([^"\']+)["\']', text)
+                if not m:
+                    continue
+                raw = re.sub(r"\$env:([A-Za-z_][A-Za-z0-9_]*)", lambda mm: env.get(mm.group(1).lower(), mm.group(0)),
+                             m.group(1))
+                out[f.stem.lower()] = Path(raw)
+        self.__dict__["_ps1_paths"] = out
+        self.log(f"EmuDeck launchers: {len(out)} found in {[str(d) for d in self.launcher_dirs()]}")
+        return out
+
+    def _from_launchers(self, emu_id, spec):
+        paths = self._windows_launcher_paths()
+        for kw in spec["kw"]:
+            for stem, path in paths.items():
+                if kw not in stem or (emu_id == "dolphin" and "primehack" in stem):
+                    continue
+                try:
+                    if path.is_file():
+                        return path
+                    # EmuDeck sometimes names the exe differently from its launcher; look beside it
+                    if path.parent.is_dir():
+                        exes = sorted(path.parent.glob("*.exe"))
+                        for pat in spec["win"]:
+                            exe_pat = pat.rpartition("/")[2].lower()
+                            import fnmatch
+                            hit = next((e for e in exes if fnmatch.fnmatch(e.name.lower(), exe_pat)), None)
+                            if hit:
+                                return hit
+                except OSError:
+                    continue
+        return None
+
+    def log(self, msg):
+        self.__dict__.setdefault("search_log", []).append(msg)
+        print("[emulators]", msg, flush=True)
+
+    def diagnostics(self):
+        """Human-readable summary of where emulators were looked for (Settings > Emulator setup)."""
+        lines = []
+        if IS_WINDOWS:
+            lines.append(f"EmuDeck launchers: {len(self._windows_launcher_paths())} in "
+                         f"{', '.join(str(d) for d in self.launcher_dirs()) or 'no launchers folder found'}")
+            for root, depth in self.windows_emu_roots():
+                n = len(self._exe_index(root, depth))
+                lines.append(f"{root}: {n} programs")
+        else:
+            lines.append(f"Launchers: {', '.join(str(d) for d in self.launcher_dirs()) or 'none found'}")
+        return lines
+
     def _find_windows_exe(self, emu_id, patterns):
         """Match patterns like 'PCSX2*/pcsx2-qt*.exe' at any depth (folder names may differ)."""
         import fnmatch
@@ -245,7 +325,7 @@ class Emulators:
             cmd = list(ov)
         elif spec:
             if IS_WINDOWS:
-                hit = self._find_windows_exe(emu_id, spec["win"])
+                hit = self._from_launchers(emu_id, spec) or self._find_windows_exe(emu_id, spec["win"])
                 if hit:
                     cmd = [str(hit)]
                 if not cmd:
@@ -281,6 +361,7 @@ class Emulators:
                             if cmd:
                                 break
         self._cache[emu_id] = cmd
+        self.log(f"{emu_id}: {cmd[0] if cmd else 'NOT FOUND'}")
         return cmd
 
     def retroarch_core_path(self, core: str):

@@ -113,6 +113,7 @@ class RAState:
         else:
             self.client = None
         self.profile, self.recent, self.completion = None, [], []
+        self.loading = False        # a request for the previous account is ignored when it returns
         self.progress.clear()
         self.prog = None
         self.awards = {}
@@ -145,7 +146,8 @@ class RAState:
             return prof, recent, comp
 
         def done(res):
-            if client is not self.client:
+            if client is not self.client:   # account changed meanwhile: drop this result
+                self.loading = False
                 return
             self.profile, self.recent, self.completion = res
             self.recent.sort(key=lambda a: a.get("Date", ""), reverse=True)
@@ -158,8 +160,10 @@ class RAState:
             self.version += 1
 
         def fail(e):
-            self.error = str(e)
             self.loading = False
+            if client is not self.client:
+                return
+            self.error = str(e)
             self.last_refresh = time.time()
             self.version += 1
         self.tasks.submit(work, callback=done, error=fail)

@@ -10,7 +10,39 @@ from pathlib import Path
 from . import __version__
 
 UA = f"RetroHome/{__version__} (+emulator frontend)"
-_ctx = ssl.create_default_context()
+
+# Where Linux distributions keep their trusted certificates (SteamOS/Arch, Debian/Ubuntu, Fedora, ...)
+SYSTEM_CA_FILES = ("/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt",
+                   "/etc/ssl/cert.pem", "/etc/ssl/ca-bundle.pem", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem")
+
+
+def make_context() -> ssl.SSLContext:
+    """HTTPS context that works in the release builds too.
+
+    A PyInstaller build carries the OpenSSL of the machine that built it, which looks for
+    certificates where *that* machine kept them - on a Steam Deck there's nothing there, so every
+    HTTPS request failed with CERTIFICATE_VERIFY_FAILED. Add certifi's bundle (shipped with the
+    build) and the system's own bundle so verification always has something to check against.
+    """
+    ctx = ssl.create_default_context()
+    extra = []
+    try:
+        import certifi
+        extra.append(certifi.where())
+    except ImportError:
+        pass
+    extra += [p for p in SYSTEM_CA_FILES if os.path.isfile(p)]
+    if os.environ.get("SSL_CERT_FILE"):
+        extra.append(os.environ["SSL_CERT_FILE"])
+    for path in extra:
+        try:
+            ctx.load_verify_locations(cafile=path)
+        except (OSError, ssl.SSLError):
+            pass
+    return ctx
+
+
+_ctx = make_context()
 
 
 class HttpError(OSError):

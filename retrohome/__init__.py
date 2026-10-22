@@ -1,3 +1,3 @@
 """RetroHome - a console-style home screen for emulated games."""
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 APP_NAME = "RetroHome"

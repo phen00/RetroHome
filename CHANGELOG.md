@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.10 — 2026-10-22
+- Fixed signing in, achievements, pictures and updates on the Steam Deck failing with
+  "CERTIFICATE_VERIFY_FAILED"
+- **Sign in with password:** opens retroachievements.org in the built-in browser; sign in there
+  and RetroHome picks up your Web API key and signs you in, so you don't have to copy it
+- Fixed achievements not loading again after switching RetroAchievements account until RetroHome
+  was restarted
+
 ## 1.0.9 — 2026-10-22
 - The XP bar along the bottom of the home screen is now always the same length
 - Favourite and Achievements now sit next to the Play button; the bottom right only shows

@@ -239,6 +239,14 @@ class Browser(QMainWindow):
         v.addWidget(bar)
         self.setCentralWidget(central)
 
+        self.grab_key = bool(getattr(a, "grab_ra_key", False))
+        self.found_key = False
+        self.last_redirect = 0.0
+        if self.grab_key:
+            self.view.loadFinished.connect(lambda ok: self._look_for_key(tries=8))
+            QApplication.clipboard().dataChanged.connect(self._clipboard_key)
+            self.where.setText("Sign in to RetroAchievements - RetroHome picks up your Web API key automatically")
+
         self.pad = Pad()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -252,6 +260,59 @@ class Browser(QMainWindow):
         self.hint.setText(f"Controller: left stick = pointer · {t(f, 'a')} click · right stick / D-pad scroll · "
                           f"{t(f, 'lb')}/{t(f, 'rb')} back/forward · {t(f, 'y')} address bar · "
                           f"{t(f, 'x')} supported files · {t(f, 'start')} close")
+
+    # ------------------------------------------------------------ "sign in with password"
+    _GRAB_JS = """(() => {
+        const vals = Array.from(document.querySelectorAll('input, code, pre, [data-key]'))
+            .map(e => e.value || e.textContent || '').filter(v => v && v.length < 80);
+        return JSON.stringify({html: document.documentElement.outerHTML.slice(0, 2000000),
+                               text: document.body ? document.body.innerText : '', values: vals,
+                               path: location.pathname});
+    })()"""
+
+    def _look_for_key(self, tries=0):
+        if self.found_key or "retroachievements.org" not in self.view.url().host():
+            return
+
+        def got(raw):
+            if self.found_key:
+                return
+            from .rakey import SETTINGS_URL, find_key, find_user
+            try:
+                d = json.loads(raw or "{}")
+            except ValueError:
+                d = {}
+            key = find_key(d.get("html", ""), d.get("text", ""), d.get("values", []))
+            if key:
+                self._found(find_user(d.get("html", "")), key)
+                return
+            path = (d.get("path") or "").lower()
+            signing_in = any(k in path for k in ("login", "register", "password", "reset", "verify"))
+            if not path.startswith("/settings") and not signing_in and time.time() - self.last_redirect > 5:
+                self.last_redirect = time.time()        # signed in now: go to the page with the key
+                self.go(SETTINGS_URL)
+            elif tries > 0:                             # the settings page may still be rendering
+                QTimer.singleShot(1000, lambda: self._look_for_key(tries - 1))
+            elif path.startswith("/settings"):
+                self.status.setText("Press the copy button next to your Web API Key")
+        self.view.page().runJavaScript(self._GRAB_JS, got)
+
+    def _clipboard_key(self):
+        from .rakey import key_from_clipboard
+        key = key_from_clipboard(QApplication.clipboard().text())
+        if key and not self.found_key:
+            self._found("", key)
+
+    def _found(self, user, key):
+        self.found_key = True
+        self.results.append({"status": "ra_key", "user": user, "key": key, "files": [],
+                             "message": "Found your Web API key - signing you in", "time": time.time()})
+        try:
+            self.report_path.write_text(json.dumps(self.results), encoding="utf-8")
+        except OSError:
+            pass
+        self.status.setText("✓ Found your Web API key - returning to RetroHome")
+        QTimer.singleShot(1200, self.close)
 
     # ------------------------------------------------------------ navigation
     def go(self, text):
@@ -399,6 +460,7 @@ def main():
     ap.add_argument("--title", default="")
     ap.add_argument("--fullscreen", action="store_true")
     ap.add_argument("--pad-family", default="xbox")
+    ap.add_argument("--grab-ra-key", action="store_true")
     a = ap.parse_args()
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-sandbox")
     app = QApplication(sys.argv[:1])

@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).parent          # noqa: F821  (SPECPATH is provided by PyInstaller)
 IS_WIN = sys.platform.startswith("win")
@@ -19,6 +19,10 @@ try:  # the built-in browser is included whenever PyQt6-WebEngine is installed i
 except ImportError:
     print(">>> Building WITHOUT the built-in browser (PyQt6-WebEngine not installed)")
 
+# trusted certificates for HTTPS (the Steam Deck has none where the bundled OpenSSL looks)
+extra_datas = collect_data_files("certifi")
+hidden += ["certifi"]
+
 try:
     import py7zr  # noqa: F401
     hidden += collect_submodules("py7zr")
@@ -28,7 +32,7 @@ except ImportError:
 a = Analysis(
     [str(ROOT / "run.py")],
     pathex=[str(ROOT)],
-    datas=[(str(ROOT / "assets"), "assets")],
+    datas=[(str(ROOT / "assets"), "assets")] + extra_datas,
     hiddenimports=hidden,
     excludes=["tkinter", "unittest", "pydoc", "PyQt5", "PySide2", "PySide6"],
     noarchive=False,

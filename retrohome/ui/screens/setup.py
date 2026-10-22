@@ -239,9 +239,10 @@ class RASetup(Menu):
         self.busy = False
         super().__init__(
             app, "RetroAchievements",
-            "Sign in to track achievements on the home screen. You need your username and your "
-            "Web API key, found at retroachievements.org → Settings → Keys (not your password). "
-            "Also sign in to RetroAchievements inside RetroArch / your emulators so they can unlock.",
+            "Sign in to track achievements on the home screen. Easiest: Sign in with password - "
+            "RetroHome opens retroachievements.org and picks up your Web API key for you. Or type your "
+            "username and Web API key (retroachievements.org → Settings → Keys). Also sign in to "
+            "RetroAchievements inside RetroArch / your emulators so they can unlock.",
             on_back=self._back, step="LINK YOUR ACCOUNT" if first_run else "")
         self._build()
 
@@ -254,6 +255,8 @@ class RASetup(Menu):
     def _build(self):
         masked = (self.key[:4] + "•" * max(0, len(self.key) - 4)) if self.key else "Not set"
         items = [
+            ("Sign in with password", "Opens retroachievements.org - sign in there and RetroHome finds your key",
+             self._password_sign_in),
             ("Username", self.user or "Not set", lambda: self.app.push(
                 Keyboard(self.app, "RetroAchievements username", self.user, self._set_user))),
             ("Web API key", masked, lambda: self.app.push(
@@ -265,6 +268,29 @@ class RASetup(Menu):
             items.append(("Sign out", "Remove saved RetroAchievements details", self._sign_out))
         items.append(("Skip for now" if self.first_run else "Back", "", self._back))
         self.set_items(items)
+
+    def _password_sign_in(self):
+        from ...rakey import SETTINGS_URL
+        from .ralib import open_page
+
+        def closed(results):
+            found = next((r for r in reversed(results or []) if r.get("status") == "ra_key"), None)
+            if not found:
+                self.status = "No key found - sign in on the page, or type your key below"
+                self._build()
+                return
+            self.key = found["key"]
+            self.user = found.get("user") or self.user
+            if self.user:
+                self._verify()
+            else:
+                self._build()
+                self.app.push(Keyboard(self.app, "RetroAchievements username", "",
+                                       lambda v: (self._set_user(v), self._verify())))
+        open_page(self.app, SETTINGS_URL, "Sign in to RetroAchievements", ["--grab-ra-key"], closed)
+        top = self.app.top
+        if type(top).__name__ == "BrowserOpen":
+            top.sub = "Sign in on the page. RetroHome picks up your Web API key and signs you in."
 
     def _set_user(self, v):
         self.user = v

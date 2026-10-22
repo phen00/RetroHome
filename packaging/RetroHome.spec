@@ -1,5 +1,6 @@
 # PyInstaller recipe for RetroHome release builds (Windows .exe and Linux / Steam Deck binary).
 # Run through packaging/build_windows.bat or packaging/build_linux.sh rather than directly.
+import os
 import sys
 from pathlib import Path
 
@@ -37,6 +38,18 @@ a = Analysis(
     excludes=["tkinter", "unittest", "pydoc", "PyQt5", "PySide2", "PySide6"],
     noarchive=False,
 )
+if not IS_WIN:
+    # Don't ship the build machine's graphics stack / C++ runtime: on SteamOS the Mesa drivers loaded
+    # by the browser's GPU process need the system's own (newer) copies, and the old ones made it
+    # abort on start (exit code -6). Every Linux desktop and SteamOS has these libraries.
+    SYSTEM_LIBS = ("libstdc++.so", "libgcc_s.so", "libgbm.so", "libdrm", "libEGL", "libGL.", "libGLX",
+                   "libGLdispatch", "libOpenGL", "libvulkan", "libfontconfig.so", "libfreetype.so",
+                   "libX11.so", "libX11-xcb.so", "libxcb.so", "libwayland-", "libdbus-1.so", "libglib-2.0.so",
+                   "libgobject-2.0.so", "libgio-2.0.so", "libgmodule-2.0.so", "libz.so")
+    before = len(a.binaries)
+    a.binaries = [b for b in a.binaries if not os.path.basename(b[0]).startswith(SYSTEM_LIBS)]
+    print(f">>> Left out {before - len(a.binaries)} system libraries (use the system's own)")
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,

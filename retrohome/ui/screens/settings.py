@@ -44,8 +44,9 @@ class Settings(Menu):
                                       cfg["friend_alerts"] else "Off"), self._toggle_friends),
             ("Screenshot backgrounds", "On" if cfg["screenshot_backgrounds"] else "Off", self._toggle_shots),
             ("Ask who's playing at start-up", "On" if cfg["ask_user_on_start"] else "Off", self._toggle_ask),
-            ("Browser for the RA Library", "Installed - A to reinstall/update" if self._browser_ok()
-             else "Not installed - A to install (about 150-200 MB)", self._browser),
+            ("Browser for the RA Library", self._browser_detail(), self._browser),
+            ("Browser compatibility mode", ("On - no GPU acceleration (use if the browser crashes)" if
+                                            cfg["browser_safe_mode"] else "Off"), self._toggle_browser_safe),
             ("Emulator setup", "Check which consoles are ready to play", self._emus),
             ("Emulators folder", (app.emus.overrides.get("emulators_dir") if app.emus else "") or
              "Automatic (finds EmuDeck's emulators)", self._emus_dir),
@@ -74,11 +75,25 @@ class Settings(Menu):
         from .ralib import browser_available
         return browser_available()
 
+    def _browser_detail(self):
+        from ...paths import FROZEN
+        if FROZEN:
+            return ("Built in - A to test it" if self._browser_ok() else "Not included in this build")
+        return ("Installed - A to reinstall/update" if self._browser_ok()
+                else "Not installed - A to install (about 150-200 MB)")
+
+    def _toggle_browser_safe(self):
+        self.app.config["browser_safe_mode"] = not self.app.config["browser_safe_mode"]
+        self._build()
+
     def _browser(self):
         from ...paths import FROZEN
         if FROZEN:
-            self.app.toast("The browser is built into this release" if self._browser_ok()
-                           else "This release was built without the browser")
+            if self._browser_ok():
+                from .ralib import open_page
+                open_page(self.app, "https://retroachievements.org", "Browser test")
+            else:
+                self.app.toast("This release was built without the browser")
             return
         from .ralib import InstallBrowser
         self.app.push(InstallBrowser(self.app, lambda: None))

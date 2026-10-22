@@ -23,7 +23,8 @@ GLOBAL_DEFAULTS = {
     "show_all_games": False,      # False: only games with a RetroAchievements set (when signed in)
     "auto_update_check": True,    # look for a new release on GitHub at start-up
     "skipped_update": "",
-    "friend_alerts": True,        # notify when someone you follow on RetroAchievements starts playing
+    "friend_alerts": True,
+    "browser_safe_mode": False,   # built-in browser without GPU / sandbox (set automatically after a crash)        # notify when someone you follow on RetroAchievements starts playing
 }
 PROFILE_DEFAULTS = {
     "name": "Player",

@@ -18,7 +18,6 @@ from ..artwork import Artwork  # noqa: E402
 from ..config import Config  # noqa: E402
 from ..emulators import Emulators, LaunchError  # noqa: E402
 from ..library import Library, RAState  # noqa: E402
-from ..paths import is_steam_deck  # noqa: E402
 from ..tasks import Tasks  # noqa: E402
 from . import gfx  # noqa: E402
 from .input import Input  # noqa: E402
@@ -156,7 +155,7 @@ class App:
             pass
         self.display = None
         self.canvas = None
-        self._open_display(fullscreen=bool(self.config["fullscreen"] or is_steam_deck()))
+        self._open_display(fullscreen=bool(self.config["fullscreen"]))   # remembered (default: fullscreen)
         pygame.mouse.set_visible(False)
         self.clock = pygame.time.Clock()
         self.tasks = Tasks()

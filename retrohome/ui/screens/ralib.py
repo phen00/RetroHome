@@ -300,22 +300,68 @@ def open_page(app, url, title, extra=(), on_close=None):
     _start_browser(app, ["--url", url, "--home", url, *extra], title, "", on_close)
 
 
+SAFE_FLAGS = "--disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --no-sandbox"
+
+
+def browser_log() -> Path:
+    return cache_dir() / "browser.log"
+
+
+def _browser_env(safe: bool):
+    root = Path(__file__).resolve().parents[3]   # project folder containing the retrohome package
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(root) + os.pathsep + env.get("PYTHONPATH", "")
+    if safe:
+        # compatibility mode: no GPU (software drawing) and no Chromium sandbox - for systems where
+        # the browser's GPU process can't start (it then aborts, exit code -6)
+        env["QTWEBENGINE_CHROMIUM_FLAGS"] = SAFE_FLAGS
+        env["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+        env["LIBGL_ALWAYS_SOFTWARE"] = "1"
+        env["QT_QUICK_BACKEND"] = "software"
+    return env
+
+
+def _launch_browser(app, cmd, safe):
+    root = Path(__file__).resolve().parents[3]
+    try:
+        log = open(browser_log(), "w", encoding="utf-8", errors="replace")
+    except OSError:
+        log = subprocess.DEVNULL
+    try:
+        return subprocess.Popen(cmd, cwd=None if FROZEN else str(root), env=_browser_env(safe),
+                                stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+    finally:
+        if log is not subprocess.DEVNULL:
+            log.close()      # the child has its own copy
+
+
 def _start_browser(app, args, title, folder, on_close=None):
     report = cache_dir() / f"browser-report-{os.getpid()}-{int(time.time())}.json"
-    root = Path(__file__).resolve().parents[3]   # project folder containing the retrohome package
     launcher = [sys.executable, "--browser"] if FROZEN else [sys.executable, "-m", "retrohome.browser"]
     cmd = [*launcher, *args, "--rom-dir", str(app.config["rom_dir"]), "--report", str(report), "--title", title]
     if app.config["fullscreen"]:
         cmd.append("--fullscreen")
     cmd += ["--pad-family", app.input.pad_family]
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(root) + os.pathsep + env.get("PYTHONPATH", "")
+    safe = bool(app.config["browser_safe_mode"])
     try:
-        proc = subprocess.Popen(cmd, cwd=None if FROZEN else str(root), env=env, stdin=subprocess.DEVNULL)
+        proc = _launch_browser(app, cmd, safe)
     except OSError as e:
         app.dialog("Couldn't open the browser", str(e))
         return
-    app.push(BrowserOpen(app, proc, report, title, folder, on_close))
+    scr = BrowserOpen(app, proc, report, title, folder, on_close)
+    scr.cmd, scr.safe = cmd, safe
+    app.push(scr)
+
+
+def _last_log_line():
+    try:
+        lines = [ln.strip() for ln in browser_log().read_text(encoding="utf-8", errors="replace").splitlines()]
+    except OSError:
+        return ""
+    noise = ("Detected locale", "Qt depends on", "If this causes", "for more information")
+    useful = [ln for ln in lines if ln and not ln.startswith(noise)]
+    fatal = [ln for ln in useful if "FATAL" in ln or "Fatal" in ln or "Check failed" in ln or "Could not" in ln]
+    return (fatal or useful or [""])[-1][-220:]
 
 
 class BrowserOpen(Screen):
@@ -325,6 +371,8 @@ class BrowserOpen(Screen):
         super().__init__(app)
         self.proc, self.report, self.title, self.folder = proc, Path(report), title, folder
         self.on_close = on_close
+        self.cmd, self.safe = None, False
+        self.started = time.time()
         self.results = []
         self.last_read = 0
         self.closing = False
@@ -354,6 +402,19 @@ class BrowserOpen(Screen):
             self.last_read = time.time()
             self._read()
         code = self.proc.poll()
+        if code is None and self.safe and not self.app.config["browser_safe_mode"] and \
+                time.time() - self.started > 8:
+            self.app.config["browser_safe_mode"] = True       # compatibility mode works here: keep it
+        if code not in (0, None) and not self.results and not self.closing and not self.safe and self.cmd \
+                and time.time() - self.started < 30:
+            # crashed while starting (e.g. exit code -6 on SteamOS): try again in compatibility mode
+            try:
+                self.proc = _launch_browser(self.app, self.cmd, True)
+                self.safe, self.started = True, time.time()
+                self.app.toast("The browser crashed - retrying in compatibility mode")
+                return
+            except OSError:
+                pass
         if code is None:
             # the browser closes itself on the flag; if it's stuck, end it
             if self.closing and time.time() - getattr(self, "close_requested", time.time()) > 150:
@@ -386,9 +447,13 @@ class BrowserOpen(Screen):
             app.library.scan(on_done=rescanned)
         if errors:
             app.dialog("Some downloads weren't added", " · ".join(errors[:4]))
-        if code not in (0, None) and not self.results:
+        if code not in (0, None) and not self.results and not self.closing:
+            last = _last_log_line()
+            fix = ("Reinstall it from Settings > Browser for the RA Library." if not FROZEN else
+                   "Please send the log file to the developer.")
             app.dialog("The browser closed unexpectedly",
-                       f"Exit code {code}. If this keeps happening, reinstall the browser from Settings.")
+                       f"Exit code {code}" + (" (also in compatibility mode)" if self.safe else "") + f". {fix} "
+                       f"Log: {browser_log()}" + (f"  ·  Last message: {last}" if last else ""))
 
     def draw(self, s):
         gfx.blit_text(s, "Browser open", (gfx.W // 2, gfx.H // 2 - 80), 22, gfx.TEXT_DIM, anchor="center")

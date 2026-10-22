@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.11 — 2026-10-22
+- Fixed the built-in browser crashing on the Steam Deck ("exit code -6"), which also stopped
+  **Sign in with password** and the RA Library from working
+- If the browser still crashes when it opens, RetroHome reopens it in compatibility mode (no GPU
+  acceleration) and keeps using that. It can also be turned on in **Settings → Browser
+  compatibility mode**
+- **Settings → Browser for the RA Library** now opens a test page in release builds, and the error
+  message shows where the browser's log is instead of suggesting a reinstall
+- RetroHome now remembers windowed mode on the Steam Deck too
+
 ## 1.0.10 — 2026-10-22
 - Fixed signing in, achievements, pictures and updates on the Steam Deck failing with
   "CERTIFICATE_VERIFY_FAILED"

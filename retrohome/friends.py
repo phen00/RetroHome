@@ -15,11 +15,14 @@ MAX_FRIENDS = 100           # summaries fetched per refresh (each is one API cal
 
 
 def ra_time(s) -> float:
-    """RetroAchievements timestamps ("2026-10-22 18:05:04") are UTC."""
-    try:
-        return float(calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%d %H:%M:%S")))
-    except (TypeError, ValueError):
-        return 0.0
+    """RetroAchievements timestamps ("2026-10-22 18:05:04" or ISO "2026-10-22T18:05:04+00:00") are UTC."""
+    t = str(s or "")[:19].replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return float(calendar.timegm(time.strptime(t, fmt)))
+        except ValueError:
+            pass
+    return 0.0
 
 
 def friend_from(follow: dict, summ: dict, now=None) -> dict:

@@ -29,16 +29,45 @@ class Profile(Screen):
 
     # ------------------------------------------------------------ data
     def _recent(self):
-        rows = self._played()
+        rows = self._history()
         rows.sort(key=lambda r: -(r[2].get("last") or 0))
         return rows[:RECENT]
 
-    def _played(self):
-        """[(game or None, game_id, history entry)] sorted by play time."""
+    def _history(self):
+        """Games timed in RetroHome: [(game or None, game_id, history entry, RA entry or None)]."""
         hist = self.app.config.profile.get("history", {}) or {}
         lib = self.app.library.by_id
-        rows = [(lib.get(gid), gid, e) for gid, e in hist.items() if e.get("count") or e.get("playtime")]
+        rows = [(lib.get(gid), gid, e, None) for gid, e in hist.items() if e.get("count") or e.get("playtime")]
         rows.sort(key=lambda r: (-(r[2].get("playtime") or 0), -(r[2].get("last") or 0)))
+        return rows
+
+    def _played(self):
+        """Every game you've played: your whole RetroAchievements history plus anything timed in
+        RetroHome, newest activity first. [(game or None, game_id, history entry, RA entry or None)]"""
+        ra, lib = self.app.ra, self.app.library
+        hist = self.app.config.profile.get("history", {}) or {}
+        key = (ra.version, lib.version, len(ra.completion), sum(e.get("count", 0) for e in hist.values()))
+        if getattr(self, "_played_key", None) == key:
+            return self._played_rows
+        from ...friends import ra_time
+        by_ra = {}
+        for g in lib.all:
+            if g.ra_game_id:
+                by_ra.setdefault(g.ra_game_id, g)
+        rows, seen = [], set()
+        for c in ra.completion:
+            rid = int(c.get("GameID") or 0)
+            game = by_ra.get(rid)
+            gid = game.id if game else f"ra/{rid}"
+            e = dict(hist.get(gid) or {})
+            e["last"] = max(e.get("last") or 0, ra_time(c.get("MostRecentAwardedDate")))
+            rows.append((game, gid, e, c))
+            seen.add(gid)
+        for game, gid, e, _ in self._history():
+            if gid not in seen:
+                rows.append((game, gid, e, None))
+        rows.sort(key=lambda r: -(r[2].get("last") or 0))
+        self._played_key, self._played_rows = key, rows
         return rows
 
     def _ra_for(self, game):
@@ -145,9 +174,13 @@ class Profile(Screen):
             rows = self._rows()
             if not rows:
                 return
-            game = rows[min(self.sel, len(rows) - 1)][0]
+            game, _, _, c = rows[min(self.sel, len(rows) - 1)]
             if game is None:
-                self.app.toast("That game isn't in your library any more")
+                if a == "a" and c:
+                    from .achievements import Achievements
+                    self.app.push(Achievements.for_ra_game(self.app, c))
+                else:
+                    self.app.toast("That game isn't in your library")
             elif a == "x":
                 self.app.launch(game)
             elif game.ra_game_id and self.app.ra.enabled:
@@ -193,8 +226,8 @@ class Profile(Screen):
     def _overview(self, s):
         ra = self.app.ra
         p = ra.prog
-        played = self._played()
-        total_secs = sum(e.get("playtime", 0) for _, _, e in played)
+        played = self._history()
+        total_secs = sum(e.get("playtime", 0) for _, _, e, _ in played)
         unlocked = sum(int(c.get("NumAwarded") or 0) for c in ra.completion)
         # ---- level card
         card = pygame.Rect(60, 166, gfx.W - 120, 150)
@@ -244,11 +277,11 @@ class Profile(Screen):
         else:
             y = left.y + 50
             row_h = 62
-            for i, (game, gid, e) in enumerate(rows):
+            for i, (game, gid, e, c) in enumerate(rows):
                 if y + row_h > left.bottom - 6:
                     break
                 r = pygame.Rect(left.x + 10, y, left.w - 20, row_h - 6)
-                self._game_row(s, r, game, gid, e, i == self.sel, compact=True)
+                self._game_row(s, r, game, gid, e, i == self.sel, compact=True, c=c)
                 y += row_h
         self._draw_shelf(s, shelf)
 
@@ -304,7 +337,7 @@ class Profile(Screen):
                           anchor="center")
 
     # ------------------------------------------------------------ rows
-    def _game_row(self, s, r, game, gid, e, sel, compact=False):
+    def _game_row(self, s, r, game, gid, e, sel, compact=False, c=None):
         gfx.rrect(s, gfx.PANEL_HI if sel else (255, 255, 255, 10), r, 12)
         if sel:
             gfx.glow_border(s, r, 12, self.app.t)
@@ -312,20 +345,30 @@ class Profile(Screen):
         if game:
             s.blit(tile_surface(self.app, game, ts, 8), (r.x + 6, r.y + 6))
             title, system = game.display_title, game.system.label
+        elif c:     # a RetroAchievements game that isn't in your library
+            icon = url_image(self.app, media_url(c.get("ImageIcon", "")), ts, radius=8)
+            draw_icon_slot(s, (r.x + 6, r.y + 6, ts, ts), icon, 8)
+            title, system = c.get("Title", ""), c.get("ConsoleName", "")
         else:
             draw_icon_slot(s, (r.x + 6, r.y + 6, ts, ts), None, 8)
             title, system = gid.split("/", 1)[-1], gid.split("/", 1)[0]
         info = self._ra_for(game)
+        if not (info and info[1]) and c and int(c.get("MaxPossible") or 0):
+            got, tot = int(c.get("NumAwarded") or 0), int(c.get("MaxPossible") or 0)
+            info = (got, tot, award_from_ra(c.get("HighestAwardKind"), got, int(c.get("NumAwardedHardcore") or 0),
+                                            tot))
         ach_w = 170
         tx = r.x + ts + 20
         text_w = r.right - tx - ach_w - (24 if compact else 130)
         gfx.blit_text(s, title, (tx, r.y + r.h / 2 - 20), 17, gfx.TEXT, True, max_w=text_w)
-        bits = [system]
+        bits = [system] if system else []
         if compact:
             bits.append(fmt_hours(e.get("playtime", 0)))
-        else:
-            n = e.get("count", 0)
+        elif e.get("count"):
+            n = e["count"]
             bits.append(f"{n} session{'s' if n != 1 else ''}")
+        elif not game:
+            bits.append("not in your library")
         if e.get("last"):
             bits.append(ago(e["last"]))
         gfx.blit_text(s, "  ·  ".join(bits), (tx, r.y + r.h / 2 + 2), 14, gfx.TEXT_DIM, max_w=text_w)
@@ -340,8 +383,9 @@ class Profile(Screen):
         elif self.app.ra.enabled:
             gfx.blit_text(s, "No set", (ax, r.centery), 14, gfx.TEXT_FAINT, anchor="midleft")
         if not compact:
-            gfx.blit_text(s, fmt_hours(e.get("playtime", 0)), (r.right - 20, r.centery), 20, gfx.TEXT, True,
-                          anchor="midright")
+            secs = e.get("playtime", 0)
+            gfx.blit_text(s, fmt_hours(secs) if secs else "–", (r.right - 20, r.centery), 20,
+                          gfx.TEXT if secs else gfx.TEXT_FAINT, True, anchor="midright")
 
     def _scroll_rows(self, n, y0, row_h):
         visible = max(1, (gfx.H - 60 - y0) // row_h)
@@ -354,18 +398,20 @@ class Profile(Screen):
 
     def _played_tab(self, s):
         rows = self._played()
-        total = sum(e.get("playtime", 0) for _, _, e in rows)
+        total = sum(e.get("playtime", 0) for _, _, e, _ in rows)
         gfx.blit_text(s, f"{len(rows)} games  ·  {fmt_hours(total)} played in RetroHome", (60, 160), 16,
                       gfx.TEXT_DIM)
+        gfx.blit_text(s, "Hours are counted for games you start from RetroHome", (gfx.W - 60, 160), 14,
+                      gfx.TEXT_FAINT, anchor="topright")
         if not rows:
             gfx.blit_text(s, "Play something! Time is recorded from launch until the emulator closes.",
                           (60, 200), 18, gfx.TEXT_FAINT)
             return
         y0, row_h = 192, 72
         for i in self._scroll_rows(len(rows), y0, row_h):
-            game, gid, e = rows[i]
+            game, gid, e, c = rows[i]
             r = pygame.Rect(60, y0 + (i - self.scroll) * row_h, gfx.W - 120, row_h - 8)
-            self._game_row(s, r, game, gid, e, i == self.sel)
+            self._game_row(s, r, game, gid, e, i == self.sel, c=c)
 
     def _trophy_case(self, s):
         items = self._trophies()
@@ -462,7 +508,9 @@ class Profile(Screen):
             elif self.sel - 1 < len(fl) and fl[self.sel - 1]["game_id"]:
                 h = [("a", "Their game"), ("x", "Play it")]
         elif self.tab in (0, 1) and self._rows():
-            h = [("a", "Achievements"), ("x", "Play")]
+            rows = self._rows()
+            game = rows[min(self.sel, len(rows) - 1)][0]
+            h = [("a", "Achievements")] + ([("x", "Play")] if game else [])
         elif self.tab == 2:
             h = [("a", "Achievements")]
         return h + [("lb", "Prev tab"), ("rb", "Next tab"), ("y", "Refresh"), ("b", "Back")]

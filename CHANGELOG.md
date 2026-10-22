@@ -1,14 +1,19 @@
 # Changelog
 
+## 1.0.7 — 2026-10-22
+- **Friends:** a new Friends tab on your profile shows the people you follow on RetroAchievements
+  and what they're playing right now (or last played). **Add a friend** opens their RA page so you
+  can follow them. A on a friend opens their game's achievements, X plays it if you have it
+- RetroHome tells you when a friend starts playing (turn off in **Settings → Friend notifications**)
+- **Played games** now lists every game in your RetroAchievements history, not just the ones
+  started from RetroHome, newest first. Hours are still counted for games started from RetroHome
+- RetroHome now checks for updates every time it starts (it used to wait 6 hours between checks)
+
 ## 1.0.6 — 2026-10-22
 - **Platinum is now the award for beating a game** (hardcore or softcore). The separate Beaten
   award is gone; games you'd already beaten count as Platinum
 - Your profile's Overview now shows your RetroAchievements points, softcore points, RetroPoints,
   achievements unlocked and site rank
-- **Friends:** a new Friends tab on your profile shows the people you follow on RetroAchievements
-  and what they're playing right now (or last played). **Add a friend** opens their RA page so you
-  can follow them. A on a friend opens their game's achievements, X plays it if you have it
-- RetroHome tells you when a friend starts playing (turn off in **Settings → Friend notifications**)
 
 ## 1.0.5 — 2026-10-22
 - **Automatic updates:** RetroHome now checks GitHub for new versions at start-up, shows what's

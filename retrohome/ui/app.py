@@ -543,6 +543,7 @@ class App:
                     traceback.print_exc()
             self._maybe_celebrate()
             self._watch_friends()
+            self._watch_updates()
             top = self.top
             if top:
                 try:
@@ -554,6 +555,16 @@ class App:
             self.render(dt)
         self.tasks.shutdown()
         pygame.quit()
+
+    def _watch_updates(self):
+        if not self._update_checked or self.playing or self.pending_update or self.t - getattr(
+                self, "_upd_poll", -1e9) < 60:
+            return
+        self._upd_poll = self.t
+        from ..updater import should_auto_check
+        if should_auto_check(self.config, at_launch=False):
+            from .screens.update import check_for_updates
+            check_for_updates(self)
 
     def _watch_friends(self):
         """Every few minutes, see who started playing (people you follow on RetroAchievements)."""

@@ -28,6 +28,7 @@ def check_for_updates(app, manual=False):
             app.push(UpdatePrompt(app, info))
 
     def fail(e):
+        cfg.data["update_checked_at"] = time.time()     # offline: don't retry every minute
         if manual:
             app.dialog("Couldn't check for updates", str(e))
     app.tasks.submit(updater.check, callback=done, error=fail)

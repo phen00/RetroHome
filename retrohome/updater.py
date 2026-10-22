@@ -181,8 +181,14 @@ def apply(new_dir: Path, target: Path = None, pid: int = None, relaunch: bool = 
     return script
 
 
-def should_auto_check(config) -> bool:
+RECHECK_EVERY = 6 * 3600     # while RetroHome stays open
+
+
+def should_auto_check(config, at_launch=True) -> bool:
+    """Every launch checks (one small request); a long-running session checks again every 6 hours."""
     if not config["auto_update_check"]:
         return False
+    if at_launch:
+        return True
     last = float(config.data.get("update_checked_at") or 0)
-    return time.time() - last > 6 * 3600
+    return time.time() - last > RECHECK_EVERY

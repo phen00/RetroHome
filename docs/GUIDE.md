@@ -88,8 +88,9 @@ Game awards, shown on tiles, the game info and the trophy case:
 
 Earning a Mythic/Platinum plays a celebration after the session report. Open your profile by moving right past the last tab on the home bar (your name is highlighted),
 or from the RetroAchievements card (move down, press A). The overview shows your XP bar and
-your most recently played games with their hours and achievements; *Played games* lists every
-game RetroHome has timed; left/right or LB/RB switch
+your most recently played games with their hours and achievements; *Played games* lists every game
+in your RetroAchievements history plus anything RetroHome has timed (hours are counted for games
+started from RetroHome); left/right or LB/RB switch
 tabs, and A on a trophy opens that game's achievement list. In the achievement tracker, A opens
 a game's achievement list (even for games not in your library) and X jumps to it in your library.
 
@@ -230,7 +231,7 @@ when you close a game.
 
 ## Updates
 
-From 1.0.5, RetroHome checks GitHub for a new release when it starts (at most every 6 hours) and
+From 1.0.5, RetroHome checks GitHub for a new release every time it starts (and every 6 hours while it stays open) and
 offers **Update now / Later / Skip this version**, showing that version's changes. *Update now*
 downloads the right file for your system, closes RetroHome, swaps in the new files and reopens it.
 Settings, users and caches are stored elsewhere, so nothing is lost. *Settings → Check for

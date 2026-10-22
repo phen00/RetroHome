@@ -27,7 +27,7 @@ VERSION=$($VPY -c "import retrohome; print(retrohome.__version__)")
 echo "Building RetroHome $VERSION ..."
 $VPY -m PyInstaller --noconfirm --clean --distpath dist --workpath build/pyinstaller packaging/RetroHome.spec
 
-cp README.md packaging/RELEASE_NOTES.md dist/RetroHome/
+cp README.md CHANGELOG.md dist/RetroHome/
 cp packaging/install-steamdeck.sh dist/RetroHome/
 cp assets/icon.png dist/RetroHome/retrohome.png
 chmod +x dist/RetroHome/RetroHome dist/RetroHome/install-steamdeck.sh

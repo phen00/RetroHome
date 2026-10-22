@@ -24,7 +24,8 @@ installed alongside).
 versions and attaches them to a Release (`.github/workflows/release.yml`).
 
 Release builds include the RA Library browser, so they're large (~250 MB unpacked).
-`packaging/RELEASE_NOTES.md` is the text players see.
+Each release's description is that version's section of `CHANGELOG.md` - add a `## x.y.z` section
+before publishing a release.
 
 ## Run it (from source)
 

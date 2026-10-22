@@ -59,7 +59,13 @@ jobs:
         with:
           path: out
           merge-multiple: true
+      - name: Release notes = this version's section of CHANGELOG.md
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="$ver" '/^## /{p=($2==v); next} p' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md for changes." > notes.md
+          cat notes.md
       - uses: softprops/action-gh-release@v2
         with:
           files: out/*
-          body_path: packaging/RELEASE_NOTES.md
+          body_path: notes.md

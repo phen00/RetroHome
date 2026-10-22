@@ -38,7 +38,7 @@ echo Building RetroHome %VERSION% ...
 
 "%VPY%" -m PyInstaller --noconfirm --clean --distpath dist --workpath build\pyinstaller packaging\RetroHome.spec || goto :fail
 copy /y README.md dist\RetroHome\README.md >nul
-copy /y packaging\RELEASE_NOTES.md dist\RetroHome\RELEASE_NOTES.md >nul
+copy /y CHANGELOG.md dist\RetroHome\CHANGELOG.md >nul
 
 set "NAME=RetroHome-%VERSION%-Windows-x64"
 if exist "dist\%NAME%.zip" del "dist\%NAME%.zip"

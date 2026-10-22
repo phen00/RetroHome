@@ -61,8 +61,8 @@ class Welcome(Menu):
         super().__init__(
             app,
             "Choose your ROM folder" if from_settings else "Welcome to RetroHome",
-            "Point RetroHome at your Emulation/roms folder (the one EmuDeck made, with a folder per "
-            "system). If you don't have one yet, it can create it for you.",
+            "RetroHome needs EmuDeck (emudeck.com): EmuDeck installs the emulators that launch your "
+            "games. Point RetroHome at the Emulation/roms folder EmuDeck made.",
             on_back=(lambda: app.pop()) if from_settings else None,
             step="" if from_settings else "FIRST-TIME SETUP",
         )

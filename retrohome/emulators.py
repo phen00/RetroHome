@@ -279,7 +279,8 @@ class Emulators:
             raise LaunchError(f"No emulator is set up for {system.name}. "
                               f"Add one for \"{system.folder}\" in emulators.json.")
         raise LaunchError("Couldn't find " + ", ".join(dict.fromkeys(tried)) +
-                          f" for {system.name}. Install it with EmuDeck or set it in emulators.json.")
+                          f" for {system.name}. RetroHome launches games through EmuDeck: install EmuDeck "
+                          f"(emudeck.com) and include this emulator in its setup.")
 
     def _native_command(self, game):
         p = str(game.path)

@@ -14,6 +14,13 @@
   <a href="../../releases/latest"><b>⬇ Download the latest release</b></a>
 </p>
 
+> [!IMPORTANT]
+> **RetroHome requires [EmuDeck](https://www.emudeck.com/).**
+> RetroHome is the front end: it shows your games and tracks your achievements. **EmuDeck
+> installs and configures the emulators that actually run them.** Install EmuDeck first
+> (Steam Deck or Windows), let it set up your emulators and `Emulation/roms` folder, then
+> install RetroHome. Without EmuDeck, games won't launch.
+
 ---
 
 ## Why RetroHome?
@@ -32,8 +39,9 @@ counted towards your own level.
 - Fits your screen perfectly, from the Steam Deck to 1440p, 4K and ultrawide monitors
 
 ### ⚡ One press to play
-- Point it at your **EmuDeck** ROM folder (or let it make one) and it does the rest
-- Picks the right emulator for each console automatically: RetroArch, DuckStation, PCSX2,
+- Built on top of **EmuDeck**: it finds your EmuDeck ROM folder and launches every game
+  through the emulators EmuDeck installed and configured
+- The right emulator for each console, automatically: RetroArch, DuckStation, PCSX2,
   Dolphin, PPSSPP, Cemu, RPCS3 and many more
 - Multi-disc games show up once, and you choose your disc when you hit Play
 - Play time is tracked for every game
@@ -69,6 +77,13 @@ Keyboard works too.
 
 ## Get started
 
+**1. Install EmuDeck (required).** Get it from [emudeck.com](https://www.emudeck.com/) and run
+its setup on your Steam Deck or Windows PC. It installs the emulators and creates your
+`Emulation/roms` folder. Put your games in the matching console folders (`roms/snes`,
+`roms/psx`, …).
+
+**2. Install RetroHome.**
+
 **Windows:** download `RetroHome-…-Windows-x64.zip` from
 [Releases](../../releases/latest), unzip it anywhere, and run `RetroHome.exe`.
 
@@ -76,13 +91,14 @@ Keyboard works too.
 and run `install-steamdeck.sh`. It adds RetroHome to your apps and shows you how to add it to
 Steam for Game Mode.
 
-On first launch, choose your ROM folder and sign in with your RetroAchievements username and
+**3. First launch:** choose your EmuDeck ROM folder (it's found automatically) and sign in with your RetroAchievements username and
 **Web API key** (on retroachievements.org: *Settings → Keys*). That's it.
 
 > Windows may say "Windows protected your PC" the first time. Click **More info → Run anyway**.
 
 ## Good to know
-- RetroHome is a launcher. Your emulators need to be installed already (EmuDeck sets them all up).
+- **EmuDeck is required for now.** RetroHome doesn't install or configure emulators itself; it
+  hands each game to the emulator EmuDeck set up. Support for other setups may come later.
 - To earn achievements, sign in to RetroAchievements inside your emulators too (e.g. RetroArch).
 - Only download games you're entitled to play.
 - Power users: custom emulator setups, the online server and building from source are covered in

@@ -74,6 +74,8 @@ def check(timeout=15):
     if parse_version(tag) <= parse_version(__version__):
         return None
     asset = next((a for a in data.get("assets") or [] if asset_matches(a.get("name", ""))), None)
+    if asset is None:
+        return None     # builds are still being attached (a few minutes after publishing) - try later
     return dict(version=tag.lstrip("vV"), notes=(data.get("body") or "").strip(), page=data.get("html_url") or
                 RELEASES_PAGE, url=asset and asset.get("browser_download_url"), size=asset and asset.get("size"),
                 name=asset and asset.get("name"))

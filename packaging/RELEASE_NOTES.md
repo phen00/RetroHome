@@ -1,25 +1,28 @@
-# RetroHome 1.0.0
+## Your retro library, presented like a modern console 🎮
 
-A console-style home screen for your emulated games: your EmuDeck library with box art and
-screenshots, one-press launching, RetroAchievements tracking with levels, crests and Platinum /
-Mythic awards, a post-game report, multiple users, and a RetroAchievements Library with a
-built-in browser that files downloads into the right folder.
+RetroHome is a controller-first home screen for your emulated games, with RetroAchievements built
+right in. Made for the Steam Deck, just as at home on a Windows PC.
 
-## Install
+### ✨ Highlights
+- **Beautiful home screen**: automatic box art, game screenshots behind whatever you're
+  browsing, and a layout that fits any screen from the Steam Deck to 4K and ultrawide
+- **One press to play**: works with your EmuDeck setup and picks the right emulator for every console
+- **RetroAchievements everywhere**: progress, badges, recent unlocks and what to chase next
+- **Level up as you play**: earn XP from every achievement, unlock new crest looks, and collect
+  **Platinum** and **Mythic** awards for the games you finish
+- **After-action report**: see what you unlocked and watch your XP bar fill after every session
+- **Discover new games**: browse every console and game on RetroAchievements, with a built-in
+  browser that unpacks downloads straight into the right folder
+- **Multiple users**: everyone gets their own profile, trophies and play history
+- **Full gamepad support**: Steam Deck, Xbox, PlayStation and Switch Pro controllers
 
-**Windows** – unzip `RetroHome-1.0.0-Windows-x64` anywhere and run `RetroHome\RetroHome.exe`.
-(Windows may show "Windows protected your PC" because the app isn't code-signed:
-click *More info → Run anyway*.)
+### ⬇ Download
+| Platform | File |
+|---|---|
+| **Windows** (64-bit) | `RetroHome-1.0.0-Windows-x64.zip`: unzip and run `RetroHome.exe` |
+| **Steam Deck / Linux** | `RetroHome-1.0.0-Linux-SteamDeck-x86_64.tar.gz`: extract and run `install-steamdeck.sh` |
 
-**Steam Deck** – in Desktop Mode, extract `RetroHome-1.0.0-Linux-SteamDeck-x86_64.tar.gz`
-(right-click → Extract), open the `RetroHome` folder, right-click `install-steamdeck.sh` →
-*Run In Konsole*, then add **RetroHome** to Steam as a Non-Steam Game (the script explains how).
+On first launch, pick your ROM folder and sign in with your RetroAchievements username and Web
+API key (retroachievements.org → *Settings → Keys*).
 
-On first launch it asks for your ROM folder (EmuDeck's `Emulation/roms` is found automatically)
-and your RetroAchievements username + Web API key.
-
-## Where things are kept
-
-* Settings and users: `%APPDATA%\RetroHome` (Windows), `~/.config/retrohome` (Linux)
-* Picture and achievement caches: `%LOCALAPPDATA%\RetroHome\cache`, `~/.cache/retrohome`
-* Log file (release builds): `retrohome.log` in the settings folder
+> Windows may show "Windows protected your PC". Click **More info → Run anyway**.

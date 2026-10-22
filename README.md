@@ -2,6 +2,11 @@
   <img src="assets/icon.png" width="128" alt="RetroHome">
 </p>
 
+> [!NOTE]
+> **A personal project.** I made RetroHome for myself and I'm only putting it here to make it
+> easier to share with friends. Feel free to use it, but expect rough edges, and there's no
+> promise of support or updates.
+
 <h1 align="center">RetroHome</h1>
 
 <p align="center">

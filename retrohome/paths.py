@@ -9,6 +9,53 @@ IS_LINUX = not IS_WINDOWS and not IS_MAC
 FROZEN = bool(getattr(sys, "frozen", False))   # running from a PyInstaller release build
 
 
+_OWN_ENV = {}     # variables RetroHome set for itself (not for the programs it starts)
+
+
+def set_own_env(key, value):
+    """Set an environment default meant only for RetroHome itself."""
+    if key not in os.environ:
+        os.environ[key] = value
+        _OWN_ENV[key] = value
+
+
+def system_env() -> dict:
+    """Environment for programs RetroHome starts (emulators, archive tools...).
+
+    A release build's starter points LD_LIBRARY_PATH (and a few other variables) at RetroHome's own
+    bundled libraries. Programs that inherit that load *our* copies instead of the system's and
+    can fail to start at all - on SteamOS emulators exited with code 127. Undo all of that.
+    """
+    env = dict(os.environ)
+    for k, v in _OWN_ENV.items():
+        if env.get(k) == v:
+            env.pop(k, None)
+    if not FROZEN:
+        return env
+    for k in [k for k in env if k.startswith("_PYI_") or k == "_MEIPASS2"]:
+        env.pop(k)
+    if "LD_LIBRARY_PATH_ORIG" in env:
+        env["LD_LIBRARY_PATH"] = env.pop("LD_LIBRARY_PATH_ORIG")
+    bundle = os.path.normcase(os.path.abspath(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))))
+
+    def inside(p):
+        try:
+            return os.path.normcase(os.path.abspath(p)).startswith(bundle)
+        except (TypeError, ValueError):
+            return False
+    for k, v in list(env.items()):
+        if k in ("PATH", "Path") and IS_WINDOWS:
+            continue
+        parts = v.split(os.pathsep)
+        keep = [p for p in parts if not (p and os.path.isabs(p) and inside(p))]
+        if len(keep) != len(parts):
+            if any(keep):
+                env[k] = os.pathsep.join(keep)
+            else:
+                env.pop(k)
+    return env
+
+
 def resource(*parts) -> Path:
     """A bundled file (assets/...), both from source and from a release build."""
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))

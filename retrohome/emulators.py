@@ -23,7 +23,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .paths import IS_LINUX, IS_MAC, IS_WINDOWS, config_dir
+from .paths import IS_LINUX, IS_MAC, IS_WINDOWS, cache_dir, config_dir, system_env
 
 # Standalone emulators: launcher-script keywords (EmuDeck Linux), Windows exe globs
 # (relative to EmuDeck's Emulators folder), Linux flatpak ids / binaries, and arguments.
@@ -485,12 +485,35 @@ class Emulators:
             cwd = str(Path(first).parent)
         elif first == "bash" and len(cmd) > 1:
             cwd = str(Path(cmd[1]).parent)
-        env = os.environ.copy()
+        env = system_env()          # the system's libraries, not the ones bundled with RetroHome
         kwargs = {}
         if IS_WINDOWS:
             kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0) if first == "cmd" else 0
         try:
-            proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, **kwargs)
+            out = open(emulator_log(), "w", encoding="utf-8", errors="replace")
+        except OSError:
+            out = subprocess.DEVNULL
+        try:
+            proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=out,
+                                    stderr=subprocess.STDOUT, **kwargs)
         except OSError as e:
             raise LaunchError(f"Failed to start {label}: {e}") from None
+        finally:
+            if out is not subprocess.DEVNULL:
+                out.close()
         return proc, label, cmd
+
+
+def emulator_log() -> Path:
+    """Output of the last emulator RetroHome started."""
+    return cache_dir() / "emulator.log"
+
+
+def last_log_line() -> str:
+    try:
+        lines = [ln.strip() for ln in emulator_log().read_text(encoding="utf-8", errors="replace").splitlines()]
+    except OSError:
+        return ""
+    lines = [ln for ln in lines if ln]
+    bad = [ln for ln in lines if any(k in ln.lower() for k in ("error", "not found", "cannot", "failed"))]
+    return ((bad or lines or [""])[-1])[-200:]

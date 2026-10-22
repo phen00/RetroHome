@@ -64,7 +64,8 @@ def _tool(*names):
 
 def _run(cmd):
     kw = {"creationflags": 0x08000000} if IS_WINDOWS else {}   # no console window
-    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kw)
+    from .paths import system_env
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=system_env(), **kw)
     if r.returncode != 0:
         raise InstallError(r.stdout.decode(errors="replace").strip().splitlines()[-1:] or ["extract failed"])
 

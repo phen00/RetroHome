@@ -5,11 +5,13 @@ import time
 import traceback
 from pathlib import Path
 
-os.environ.setdefault("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
-os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+from ..paths import set_own_env  # noqa: E402  (only for RetroHome itself - emulators don't get these)
+
+set_own_env("SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", "0")
+set_own_env("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 # Read controllers even while another window (the built-in browser) has focus. Screens only act on
 # that background input when they opt in (BrowserOpen does, to close the browser with Start).
-os.environ.setdefault("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1")
+set_own_env("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1")
 
 import pygame  # noqa: E402
 
@@ -403,9 +405,12 @@ class App:
         self.config.record_play(game.id, seconds)
         self.library.version += 1
         if seconds < 3 and code not in (0, None):
+            from ..emulators import emulator_log, last_log_line
+            last = last_log_line()
             self.dialog("The emulator closed straight away",
-                        f"It exited with code {code}. Check the emulator works on its own, or set its "
-                        f"command in emulators.json (Settings shows where).")
+                        f"It exited with code {code}." + (f" It said: {last}" if last else "") +
+                        f"  Check the emulator works on its own, or set its command in emulators.json "
+                        f"(Settings shows where). Full output: {emulator_log()}")
         if self.ra.enabled:
             self.ra.refresh(force=True)
             if game.ra_game_id:

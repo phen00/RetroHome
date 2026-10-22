@@ -352,7 +352,8 @@ def browser_log() -> Path:
 def _clean_env():
     """Our environment minus what Steam adds to everything a game starts: its overlay (LD_PRELOAD,
     which hooks the very OpenGL calls the browser needs) and its runtime library paths."""
-    env = os.environ.copy()
+    from ...paths import system_env
+    env = system_env()
     pre = [p for p in env.get("LD_PRELOAD", "").replace(":", " ").split() if "gameoverlayrenderer" not in p]
     if pre:
         env["LD_PRELOAD"] = " ".join(pre)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.14 — 2026-10-22
+- Fixed games not starting on the Steam Deck ("The emulator closed straight away… exit code 127"):
+  emulators were picking up libraries bundled with RetroHome instead of SteamOS's own
+- When an emulator closes straight away, the message now includes what it printed, and its full
+  output is saved to `emulator.log`
+
 ## 1.0.13 — 2026-10-22
 - Fixed the built-in browser opening behind RetroHome in Steam Deck Desktop Mode: RetroHome now
   steps out of the way while the browser is open and comes back when it closes

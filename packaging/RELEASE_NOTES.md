@@ -24,8 +24,8 @@ right in. Made for the Steam Deck, just as at home on a Windows PC.
 ### ⬇ Download
 | Platform | File |
 |---|---|
-| **Windows** (64-bit) | `RetroHome-1.0.0-Windows-x64.zip`: unzip and run `RetroHome.exe` |
-| **Steam Deck / Linux** | `RetroHome-1.0.0-Linux-SteamDeck-x86_64.tar.gz`: extract and run `install-steamdeck.sh` |
+| **Windows** (64-bit) | `RetroHome-1.0.1-Windows-x64.zip`: unzip and run `RetroHome.exe` |
+| **Steam Deck / Linux** | `RetroHome-1.0.1-Linux-SteamDeck-x86_64.tar.gz`: extract and run `install-steamdeck.sh` |
 
 With EmuDeck installed, on first launch pick your EmuDeck ROM folder (found automatically) and sign in with your RetroAchievements username and Web
 API key (retroachievements.org → *Settings → Keys*).

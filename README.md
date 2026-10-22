@@ -10,12 +10,6 @@
 <h1 align="center">RetroHome</h1>
 
 <p align="center">
-  <b>Your retro library, presented like a modern console.</b><br>
-  A controller-first home screen for your emulated games, with RetroAchievements built in.<br>
-  Made for the Steam Deck, just as at home on a Windows PC.
-</p>
-
-<p align="center">
   <a href="../../releases/latest"><b>⬇ Download the latest release</b></a>
 </p>
 

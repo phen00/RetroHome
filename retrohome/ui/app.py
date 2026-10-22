@@ -176,6 +176,7 @@ class App:
         self.artwork = None
         self.playing = None
         self.pending_update = None  # release info when a newer version is on GitHub
+        self.restart_exe = None     # Linux self-update: exec this after shutting down
         self._update_checked = False
         self.online = None        # accounts.OnlineClient for the signed-in user, if any
         self.online_status = ""
@@ -575,6 +576,10 @@ class App:
             self.render(dt)
         self.tasks.shutdown()
         pygame.quit()
+        if self.restart_exe:
+            from ..updater import exec_restart
+            self.config.save()
+            exec_restart(self.restart_exe, sys.argv[1:])
 
     def _watch_updates(self):
         if not self._update_checked or self.playing or self.pending_update or self.t - getattr(

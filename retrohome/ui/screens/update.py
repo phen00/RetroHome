@@ -154,14 +154,17 @@ class Updating(Screen):
         if self.state == "ready":
             self.state = "restarting"
             try:
-                updater.apply(self.new_dir)
+                if updater.IS_WINDOWS:
+                    updater.apply(self.new_dir)     # helper swaps the files after we exit, then reopens
+                else:
+                    self.app.restart_exe = updater.apply_in_place(self.new_dir)   # swapped already
             except Exception as e:  # noqa: BLE001
                 self.error = f"Couldn't install the update: {e}"
                 self.state = "error"
                 return
             self.restart_at = time.time() + 0.8
         if self.state == "restarting" and time.time() >= getattr(self, "restart_at", 0):
-            self.app.quit()          # the helper swaps the files once we've exited, then reopens RetroHome
+            self.app.quit()          # Windows: the helper takes over. Linux: the app restarts in place
 
     def on_action(self, a):
         if a == "b" and self.state == "downloading":

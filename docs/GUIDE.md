@@ -245,7 +245,8 @@ when you close a game.
 
 From 1.0.5, RetroHome checks GitHub for a new release every time it starts (and every 6 hours while it stays open) and
 offers **Update now / Later / Skip this version**, showing that version's changes. *Update now*
-downloads the right file for your system, closes RetroHome, swaps in the new files and reopens it.
+downloads the right file for your system, swaps in the new files and restarts RetroHome (on Linux and
+the Steam Deck it restarts in place, so it keeps working when launched from Steam).
 Settings, users and caches are stored elsewhere, so nothing is lost. *Settings → Check for
 updates* checks on demand; *Automatic update checks* turns the start-up check off. (Self-update
 works for the release downloads; if RetroHome's folder isn't writable, e.g. inside Program Files,

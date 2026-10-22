@@ -2,8 +2,13 @@
 
 1. check()    asks GitHub for the latest release and compares versions
 2. download() fetches this platform's asset (Windows .zip / Linux .tar.gz) and unpacks it
-3. apply()    writes a small helper script that waits for RetroHome to exit, copies the new
-              files over the install folder, and starts RetroHome again
+3. Windows: apply() writes a small helper script that waits for RetroHome to exit, copies the new
+              files over the install folder, and starts RetroHome again (a running .exe can't be
+              replaced).
+   Linux / Steam Deck: apply_in_place() swaps the files while RetroHome is still running (Linux
+              allows replacing a running program's files), then exec_restart() turns this very
+              process into the new version. No helper has to outlive RetroHome - Steam closes
+              everything a game started when the game exits, which killed the helper before.
 
 Settings, users and caches live outside the install folder (%APPDATA%, ~/.config), so they
 are never touched by an update.
@@ -182,6 +187,63 @@ def apply(new_dir: Path, target: Path = None, pid: int = None, relaunch: bool = 
 
 
 RECHECK_EVERY = 6 * 3600     # while RetroHome stays open
+
+
+def apply_in_place(new_dir: Path, target: Path = None) -> Path:
+    """Linux: copy the new version over the install folder now. Every file is first written next to
+    its final name, then all are renamed into place, so a failed copy (disk full...) changes nothing.
+    Returns the new executable."""
+    new_dir, target = Path(new_dir), Path(target or install_dir())
+    staged = []
+    try:
+        for src in sorted(new_dir.rglob("*")):
+            rel = src.relative_to(new_dir)
+            dest = target / rel
+            if src.is_dir() and not src.is_symlink():
+                dest.mkdir(parents=True, exist_ok=True)
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_name(dest.name + ".rh-new")
+            if tmp.is_symlink() or tmp.exists():
+                tmp.unlink()
+            if src.is_symlink():
+                os.symlink(os.readlink(src), tmp)
+            else:
+                shutil.copy2(src, tmp)
+            staged.append((tmp, dest))
+    except OSError as e:
+        for tmp, _ in staged:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+        raise UpdateError(f"Couldn't copy the update ({e}) - nothing was changed.") from None
+    for tmp, dest in staged:
+        if dest.is_dir() and not dest.is_symlink():
+            shutil.rmtree(dest)
+        os.replace(tmp, dest)       # atomic; the running program keeps its old copy until it restarts
+    exe = target / "RetroHome"
+    try:
+        exe.chmod(exe.stat().st_mode | 0o111)
+    except OSError:
+        pass
+    if new_dir.parent.name == "new":
+        shutil.rmtree(new_dir.parent.parent / "new", ignore_errors=True)
+    return exe
+
+
+def exec_restart(exe: Path, args=()):
+    """Replace this process with the freshly installed RetroHome (same process, so Steam keeps
+    tracking it). PyInstaller-specific environment is reset so the new copy starts cleanly."""
+    env = dict(os.environ)
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    for k in list(env):
+        if k.startswith("_PYI_") or k == "_MEIPASS2":
+            env.pop(k, None)
+    if "LD_LIBRARY_PATH_ORIG" in env:
+        env["LD_LIBRARY_PATH"] = env.pop("LD_LIBRARY_PATH_ORIG")
+    os.chdir(str(Path(exe).parent))
+    os.execve(str(exe), [str(exe), *args], env)
 
 
 def should_auto_check(config, at_launch=True) -> bool:

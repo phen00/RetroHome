@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.12 — 2026-10-22
+- Fixed updates not installing on the Steam Deck when RetroHome is launched from Steam: the
+  update now installs while RetroHome is still open and it restarts straight into the new version
+
 ## 1.0.11 — 2026-10-22
 - Fixed the built-in browser crashing on the Steam Deck ("exit code -6"), which also stopped
   **Sign in with password** and the RA Library from working

@@ -36,17 +36,18 @@ class Home(Screen):
     # ------------------------------------------------------------ data
     def _sync(self):
         lib = self.app.library
-        if lib.version == self.lib_version:
+        key = (lib.version, self.app.ra.enabled, self.app.only_ra)
+        if key == self.lib_version:
             return
         cur_key = self.cats[self.cat_i][0] if self.cats else "home"
         cur_game = self.cur_game()
         self.cats = lib.categories(self.app.only_ra)
         if self.app.ra.enabled:
-            if not self.cats and lib.all:
+            # the RA Library tab is always there, even with an empty library, so you can get games
+            if not self.cats:
                 self.cats = [("home", "Home", [])]
-            if self.cats:
-                self.cats.insert(1, ("ralib", "RA Library", []))
-        self.lib_version = lib.version
+            self.cats.insert(1, ("ralib", "RA Library", []))
+        self.lib_version = key
         keys = [c[0] for c in self.cats]
         self.cat_i = keys.index(cur_key) if cur_key in keys else 0
         if cur_game:
@@ -125,12 +126,18 @@ class Home(Screen):
                 g = self.cur_game()
                 if g:
                     self.app.launch(g)
+                elif not self.games and not self.on_ralib and self._ralib_index() is not None:
+                    self.cat_i = self._ralib_index()
+                    self._open_grid()
                 else:
                     self._open_grid()
             elif a == "y":
                 g = self.cur_game()
                 if g:
                     self._open_achievements(g)
+                elif not self.app.library.all:
+                    self.app.library.scan()
+                    self.app.toast("Rescanning…")
             elif a == "x":
                 g = self.cur_game()
                 if g:
@@ -153,6 +160,10 @@ class Home(Screen):
     def _settings(self):
         from .settings import Settings
         self.app.push(Settings(self.app))
+
+    def _ralib_index(self):
+        keys = [c[0] for c in self.cats]
+        return keys.index("ralib") if "ralib" in keys else None
 
     @property
     def on_ralib(self):
@@ -371,6 +382,26 @@ class Home(Screen):
                                  "(RB), or turn on Settings > Show games without achievements.",
                               (gfx.W // 2, cy + 6), 18, gfx.TEXT_DIM, anchor="center", max_w=gfx.W - 120)
             return
+        if self._ralib_index() is not None:
+            cx, cy = gfx.W // 2, gfx.H // 2 - 40
+            gfx.blit_text(s, "No games yet", (cx, cy - 90), 36, gfx.TEXT, True, anchor="center")
+            y = cy - 40
+            for ln in gfx.wrap("Browse every game that has achievements and download one - it's unpacked "
+                               "into the right folder automatically.", 20, 760, max_lines=3):
+                gfx.blit_text(s, ln, (cx, y), 20, gfx.TEXT_DIM, anchor="center")
+                y += 28
+            btn = pygame.Rect(0, 0, 300, 54)
+            btn.center = (cx, y + 44)
+            gfx.rrect(s, gfx.TEXT, btn, 27)
+            gfx.glow_border(s, btn, 27, self.app.t)
+            gfx.blit_text(s, "Open RA Library", btn.center, 21, (10, 14, 30), True, anchor="center")
+            folder = self.app.config["rom_dir"]
+            y = btn.bottom + 34
+            for ln in gfx.wrap(f"Already have games? Copy them into the console folders in {folder}, "
+                               "then press Y to rescan.", 15, 760, max_lines=3):
+                gfx.blit_text(s, ln, (cx, y), 15, gfx.TEXT_FAINT, anchor="center")
+                y += 21
+            return
         gfx.blit_text(s, "No games found yet", (gfx.W // 2, gfx.H // 2 - 50), 34, gfx.TEXT, True, anchor="center")
         gfx.blit_text(s, f"Put your ROMs in the system folders inside {self.app.config['rom_dir']}",
                       (gfx.W // 2, gfx.H // 2), 20, gfx.TEXT_DIM, anchor="center", max_w=1100)
@@ -388,6 +419,8 @@ class Home(Screen):
             return [("a", "Open profile"), ("start", "Settings")]
         g = self.cur_game()
         if not g:
+            if not self.games and not self.on_ralib and self._ralib_index() is not None:
+                return [("a", "Open RA Library"), ("y", "Rescan"), ("rb", "Next"), ("start", "Settings")]
             return [("a", "Browse RetroAchievements" if self.on_ralib else "Open Library"), ("lb", "Prev"),
                     ("rb", "Next"), ("start", "Settings")]
         h = [("a", "Play"), ("x", "Unfavourite" if self.app.config.is_fav(g.id) else "Favourite")]

@@ -347,7 +347,7 @@ class Home(Screen):
         text_w = gfx.measure(name or "", 17, True)[0]
         if ra.enabled and ra.profile:
             text_w = max(text_w, gfx.measure(f"{fmt_int(ra.profile.get('TotalPoints', 0))} pts", 14, True)[0])
-        w = 8 + 36 + 10 + text_w + 16 + (48 if ra.enabled and ra.prog else 0)
+        w = 8 + 36 + 10 + text_w + 16
         right = gfx.W - 40 - clock_w - 22
         return pygame.Rect(right - w, 24, w, 46), gfx.W - 40, name
 
@@ -366,8 +366,6 @@ class Home(Screen):
             gfx.blit_text(s, name, (x + 46, rect.y + 4), 17, gfx.TEXT, True)
             gfx.blit_text(s, f"{fmt_int(ra.profile.get('TotalPoints', 0))} pts", (x + 46, rect.y + 25), 14,
                           gfx.GOLD, True)
-            if ra.prog:
-                gfx.level_badge(s, (rect.right - 26, rect.centery), ra.prog.level, 36, self.app.t)
         else:
             from .users import avatar
             avatar(self.app, s, self.app.config.profile, (x + 18, rect.centery), 36)
@@ -433,10 +431,12 @@ class Home(Screen):
                 return [("a", "Open RA Library"), ("y", "Rescan"), ("rb", "Next"), ("start", "Settings")]
             return [("a", "Browse RetroAchievements" if self.on_ralib else "Open Library"), ("lb", "Prev"),
                     ("rb", "Next"), ("start", "Settings")]
-        h = [("a", "Play"), ("x", "Unfavourite" if self.app.config.is_fav(g.id) else "Favourite")]
+        return [("select", "Library"), ("start", "Settings")]   # Favourite / Achievements: next to Play
+
+    def _game_hints(self, g):
+        h = [("x", "Unfavourite" if self.app.config.is_fav(g.id) else "Favourite")]
         if self.app.ra.enabled:
             h.append(("y", "Achievements"))
-        h += [("select", "Library"), ("start", "Settings")]
         return h
 
     def _draw_row(self, s):
@@ -499,8 +499,7 @@ class Home(Screen):
         if not g:
             return
         x, y = ROW_X, INFO_Y
-        cover_box = pygame.Rect(gfx.W - 60 - 300, INFO_Y - 10, 300, TRACK_Y - INFO_Y - 10)
-        max_w = cover_box.x - x - 40
+        max_w = gfx.W - x - 60
         gfx.blit_text(s, g.system.name.upper(), (x, y), 15, gfx.ACCENT_HI, True, max_w=max_w)
         y += 24
         fs = 40
@@ -529,18 +528,9 @@ class Home(Screen):
                       (10, 14, 30) if self.focus == "row" else gfx.TEXT, True, anchor="midleft")
         y += 58
         self._draw_game_ra(s, g, x, y, max_w)
-        # cover art
-        art = self.app.artwork.get(g) if self.app.artwork else None
-        if art:
-            cov = self.app.images.derive(("cover", cover_box.w, cover_box.h), art,
-                                         lambda im: gfx.round_corners(gfx.fit(im, cover_box.w, cover_box.h), 12))
-            if cov:
-                r = cov.get_rect(midtop=cover_box.midtop)
-                r.right = cover_box.right
-                sh = gfx.layer((r.w + 24, r.h + 24))
-                gfx.draw.rect(sh, (0, 0, 0, 120), sh.get_rect(), border_radius=18)
-                s.blit(sh, (r.x - 12, r.y + 2))
-                s.blit(cov, r)
+        # the game's own actions sit next to its Play button (keeps the bottom-right short)
+        if self.focus == "row":
+            self.app.draw_hints(s, self._game_hints(g), left=play.right + 4, y=play.centery)
 
     def _draw_game_ra(self, s, g, x, y, max_w):
         ra = self.app.ra
@@ -680,23 +670,29 @@ class Home(Screen):
             y += 38
 
     def _draw_xp_bar(self, s):
-        """Level + XP along the bottom, stopping short of the button hints."""
+        """Level + XP along the bottom. Fixed length: the bar ends where the Friends card begins."""
         prog = self.app.ra.prog
-        y = gfx.H - 21
-        right = self.app.hints_left(self.hints()) - 48
-        x = ROW_X
-        if not prog or right - x < 260:
+        if not prog:
             return
-        gfx.level_badge(s, (x + 12, y), prog.level, 24, self.app.t, number=False)
-        x += 32
-        t = gfx.blit_text(s, f"Lv {prog.level}", (x, y), 16, gfx.TEXT, True, anchor="midleft")
-        x = t.right + 14
+        y = gfx.H - 21
+        gap = 20
+        card_w = (gfx.W - 2 * ROW_X - 2 * gap) / 3
+        bar_end = int(ROW_X + 2 * (card_w + gap)) - 24
         nums = f"{fmt_int(prog.into)} / {fmt_int(prog.need)} XP"
         nw = gfx.measure(nums, 14)[0]
-        bar_w = right - x - nw - 14
-        if bar_w > 60:
-            gfx.progress_bar(s, (x, y - 4, bar_w, 8), prog.frac, gfx.tier_bar_color(prog.level, self.app.t))
-            x += bar_w + 14
+        # the same length whatever is selected: leave room for the widest prompts the home screen shows
+        sets = [self.hints(), [("a", "Open"), ("y", "Refresh"), ("start", "Settings")],
+                [("a", "Choose"), ("select", "Library"), ("start", "Settings")],
+                [("a", "Open profile"), ("start", "Settings")], [("select", "Library"), ("start", "Settings")]]
+        limit = min(self.app.hints_left(h) for h in sets) - 30
+        bar_end = min(bar_end, limit - 14 - nw)
+        x = ROW_X
+        gfx.level_badge(s, (x + 12, y), prog.level, 24, self.app.t, number=False)
+        t = gfx.blit_text(s, f"Lv {prog.level}", (x + 32, y), 16, gfx.TEXT, True, anchor="midleft")
+        x = t.right + 14
+        if bar_end - x > 60:
+            gfx.progress_bar(s, (x, y - 4, bar_end - x, 8), prog.frac, gfx.tier_bar_color(prog.level, self.app.t))
+            x = bar_end + 14
         gfx.blit_text(s, nums, (x, y), 14, gfx.TEXT_DIM, anchor="midleft")
 
     def hunting(self):

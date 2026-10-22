@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.9 — 2026-10-22
+- The XP bar along the bottom of the home screen is now always the same length
+- Favourite and Achievements now sit next to the Play button; the bottom right only shows
+  Library and Settings while a game is selected
+- Removed the large cover picture on the right of the home screen and the level badge next to
+  your name (your level is in the XP bar)
+
 ## 1.0.8 — 2026-10-22
 - New row of cards on the home screen: **Continue hunting**, **New on RetroAchievements** (the
   newest achievement sets on the site; A shows a set's achievements, X gets the game or plays it if you

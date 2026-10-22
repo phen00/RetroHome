@@ -443,7 +443,8 @@ class App:
             x -= (gfx.measure(cap, 12, True)[0] + 14 + 22) if (kb or btn not in ("a", "b", "x", "y")) else 44
         return x
 
-    def draw_hints(self, s, hints):
+    def draw_hints(self, s, hints, left=None, y=None):
+        """Button prompts, right-aligned at the bottom right - or starting at `left` (centred on y)."""
         if not hints:
             return
         from ..padstyle import FACE_COLORS, label
@@ -452,7 +453,9 @@ class App:
         keys = {"a": "Enter", "b": "Esc", "x": "X", "y": "Y", "lb": "Q", "rb": "E", "start": "M",
                 "select": "Tab", "guide": "Esc"}
         x = gfx.W - 36
-        y = gfx.H - 22
+        if left is not None:
+            x = left + (gfx.W - 36 - self.hints_left(hints))
+        y = gfx.H - 22 if y is None else y
         for btn, text in reversed(hints):
             lw = gfx.measure(text, HINT_TEXT)[0]
             x -= lw

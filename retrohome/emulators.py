@@ -262,6 +262,26 @@ class Emulators:
                     continue
         return None
 
+    def broken_install_hint(self, emu_id):
+        """An emulator folder that exists without its program (e.g. EmuDeck's RetroArch download failed:
+        EmuDeck only checks the folder exists, and creates it for the cores either way)."""
+        if not IS_WINDOWS or emu_id not in STANDALONE:
+            return ""
+        import fnmatch
+        spec = STANDALONE[emu_id]
+        dir_pats = [p.lower().rpartition("/")[0] for p in spec["win"] if "/" in p]
+        for root, _ in self.windows_emu_roots():
+            try:
+                dirs = [d for d in root.iterdir() if d.is_dir()]
+            except OSError:
+                continue
+            for d in dirs:
+                if any(fnmatch.fnmatch(d.name.lower(), dp) for dp in dir_pats) and not any(d.rglob("*.exe")):
+                    return (f"{spec['name']}'s folder exists ({d}) but the program itself is missing - "
+                            f"its download didn't finish. Reinstall {spec['name']} in EmuDeck "
+                            f"(Manage Emulators), then try again.")
+        return ""
+
     def log(self, msg):
         self.__dict__.setdefault("search_log", []).append(msg)
         print("[emulators]", msg, flush=True)
@@ -437,6 +457,10 @@ class Emulators:
         if not prefs:
             raise LaunchError(f"No emulator is set up for {system.name}. "
                               f"Add one for \"{system.folder}\" in emulators.json.")
+        for pref in prefs:
+            hint = self.broken_install_hint("retroarch" if pref.startswith("ra:") else pref)
+            if hint:
+                raise LaunchError(hint)
         raise LaunchError("Couldn't find " + ", ".join(dict.fromkeys(tried)) +
                           f" for {system.name}. RetroHome launches games through EmuDeck: make sure EmuDeck "
                           f"(emudeck.com) installed this emulator. If it did, choose its emulators folder in "

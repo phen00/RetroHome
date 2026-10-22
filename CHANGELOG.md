@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4 — 2026-10-22
+- If an emulator's folder exists but the program is missing (for example when EmuDeck's RetroArch
+  download didn't finish), RetroHome now says so and tells you to reinstall it in EmuDeck, instead
+  of "Couldn't find…"
+
 ## 1.0.3 — 2026-10-22
 - Emulators are now found through EmuDeck's own launcher scripts, so RetroHome launches games
   wherever EmuDeck installed them

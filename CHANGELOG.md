@@ -5,6 +5,11 @@
   steps out of the way while the browser is open and comes back when it closes
 - B on RetroHome's "Browser open" screen closes the browser, so it can't get stuck. If the browser
   hasn't appeared after a while, RetroHome says so
+- Fixed the built-in browser crashing in Steam Deck Gaming Mode ("Could not initialize GLX",
+  exit code -6, even in compatibility mode). The browser no longer inherits Steam's overlay, and
+  if it still crashes RetroHome tries other graphics setups, down to fully software drawing, and
+  remembers the one that works (separately for Gaming Mode and Desktop Mode)
+- **Settings → Browser graphics** replaces "Browser compatibility mode": Automatic, or pick a setup
 
 ## 1.0.12 — 2026-10-22
 - Fixed updates not installing on the Steam Deck when RetroHome is launched from Steam: the

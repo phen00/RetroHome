@@ -300,35 +300,92 @@ def open_page(app, url, title, extra=(), on_close=None):
     _start_browser(app, ["--url", url, "--home", url, *extra], title, "", on_close)
 
 
-SAFE_FLAGS = "--disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --no-sandbox"
+NO_GPU = "--disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --no-sandbox"
+
+# Graphics setups for the browser, tried in this order until one opens a window. The first that
+# works is remembered (config "browser_mode"). SteamOS Gaming Mode (gamescope) in particular can
+# abort Qt with "Could not initialize GLX" (exit code -6).
+BROWSER_MODES = [
+    ("normal", {}),
+    ("no-gpu", {"QTWEBENGINE_CHROMIUM_FLAGS": NO_GPU, "QTWEBENGINE_DISABLE_SANDBOX": "1",
+                "QT_XCB_GL_INTEGRATION": "xcb_egl"}),
+    # no OpenGL anywhere (Qt Quick's software renderer) - works even where GLX is broken
+    ("software", {"QTWEBENGINE_CHROMIUM_FLAGS": NO_GPU, "QTWEBENGINE_DISABLE_SANDBOX": "1",
+                  "QT_XCB_GL_INTEGRATION": "none", "QT_QUICK_BACKEND": "software"}),
+    ("wayland", {"QTWEBENGINE_CHROMIUM_FLAGS": NO_GPU, "QTWEBENGINE_DISABLE_SANDBOX": "1",
+                 "QT_QPA_PLATFORM": "wayland"}),
+]
+MODE_NAMES = {"normal": "Normal", "no-gpu": "No GPU acceleration", "software": "Software drawing",
+              "wayland": "Wayland"}
+
+
+def browser_modes():
+    """Modes worth trying on this system, in order."""
+    return [m for m in BROWSER_MODES if m[0] != "wayland" or os.environ.get("WAYLAND_DISPLAY")]
+
+
+def session_kind() -> str:
+    """Steam Deck Gaming Mode (gamescope) and a normal desktop may need different setups."""
+    from ..app import App
+    return "gaming" if App._in_gamescope() else "desktop"
+
+
+def saved_mode(app) -> str:
+    m = app.config["browser_mode"]
+    return (m or {}).get(session_kind(), "") if isinstance(m, dict) else ""
+
+
+def save_mode(app, mode):
+    m = app.config["browser_mode"]
+    m = dict(m) if isinstance(m, dict) else {}
+    if mode:
+        m[session_kind()] = mode
+    else:
+        m.pop(session_kind(), None)
+    app.config["browser_mode"] = m
 
 
 def browser_log() -> Path:
     return cache_dir() / "browser.log"
 
 
-def _browser_env(safe: bool):
-    root = Path(__file__).resolve().parents[3]   # project folder containing the retrohome package
+def _clean_env():
+    """Our environment minus what Steam adds to everything a game starts: its overlay (LD_PRELOAD,
+    which hooks the very OpenGL calls the browser needs) and its runtime library paths."""
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(root) + os.pathsep + env.get("PYTHONPATH", "")
-    if safe:
-        # compatibility mode: no GPU (software drawing) and no Chromium sandbox - for systems where
-        # the browser's GPU process can't start (it then aborts, exit code -6)
-        env["QTWEBENGINE_CHROMIUM_FLAGS"] = SAFE_FLAGS
-        env["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
-        env["LIBGL_ALWAYS_SOFTWARE"] = "1"
-        env["QT_QUICK_BACKEND"] = "software"
+    pre = [p for p in env.get("LD_PRELOAD", "").replace(":", " ").split() if "gameoverlayrenderer" not in p]
+    if pre:
+        env["LD_PRELOAD"] = " ".join(pre)
+    else:
+        env.pop("LD_PRELOAD", None)
+    lib = [p for p in env.get("LD_LIBRARY_PATH", "").split(":")
+           if p and "steam-runtime" not in p and "ubuntu12_" not in p and "steamrt" not in p]
+    if lib:
+        env["LD_LIBRARY_PATH"] = ":".join(lib)
+    else:
+        env.pop("LD_LIBRARY_PATH", None)
+    for k in ("QTWEBENGINE_CHROMIUM_FLAGS", "QTWEBENGINE_DISABLE_SANDBOX", "QT_XCB_GL_INTEGRATION",
+              "LIBGL_ALWAYS_SOFTWARE", "QT_QPA_PLATFORM", "QT_QUICK_BACKEND"):
+        env.pop(k, None)
     return env
 
 
-def _launch_browser(app, cmd, safe):
+def _browser_env(mode: str):
+    root = Path(__file__).resolve().parents[3]   # project folder containing the retrohome package
+    env = _clean_env()
+    env["PYTHONPATH"] = str(root) + os.pathsep + env.get("PYTHONPATH", "")
+    env.update(dict(BROWSER_MODES)[mode] if mode in dict(BROWSER_MODES) else {})
+    return env
+
+
+def _launch_browser(app, cmd, mode):
     root = Path(__file__).resolve().parents[3]
     try:
         log = open(browser_log(), "w", encoding="utf-8", errors="replace")
     except OSError:
         log = subprocess.DEVNULL
     try:
-        return subprocess.Popen(cmd, cwd=None if FROZEN else str(root), env=_browser_env(safe),
+        return subprocess.Popen(cmd, cwd=None if FROZEN else str(root), env=_browser_env(mode),
                                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
     finally:
         if log is not subprocess.DEVNULL:
@@ -342,14 +399,18 @@ def _start_browser(app, args, title, folder, on_close=None):
     if app.config["fullscreen"]:
         cmd.append("--fullscreen")
     cmd += ["--pad-family", app.input.pad_family]
-    safe = bool(app.config["browser_safe_mode"])
+    modes = [m for m, _ in browser_modes()]
+    saved = saved_mode(app)
+    if saved in modes:          # the setup that worked last time first, then the others
+        modes = [saved] + [m for m in modes if m != saved]
+    start = 0
     try:
-        proc = _launch_browser(app, cmd, safe)
+        proc = _launch_browser(app, cmd, modes[start])
     except OSError as e:
         app.dialog("Couldn't open the browser", str(e))
         return
     scr = BrowserOpen(app, proc, report, title, folder, on_close)
-    scr.cmd, scr.safe = cmd, safe
+    scr.cmd, scr.modes, scr.mode_i = cmd, modes, start
     app.push(scr)
 
 
@@ -371,7 +432,7 @@ class BrowserOpen(Screen):
         super().__init__(app)
         self.proc, self.report, self.title, self.folder = proc, Path(report), title, folder
         self.on_close = on_close
-        self.cmd, self.safe = None, False
+        self.cmd, self.modes, self.mode_i = None, ["normal"], 0
         self.started = time.time()
         self.results = []
         self.last_read = 0
@@ -415,16 +476,17 @@ class BrowserOpen(Screen):
                 if not self.minimized and not self.closing:
                     self.minimized = self.app.minimize_window()   # get out of the browser's way
         code = self.proc.poll()
-        if code is None and self.safe and not self.app.config["browser_safe_mode"] and \
-                time.time() - self.started > 8:
-            self.app.config["browser_safe_mode"] = True       # compatibility mode works here: keep it
-        if code not in (0, None) and not self.results and not self.closing and not self.safe and self.cmd \
-                and time.time() - self.started < 30:
-            # crashed while starting (e.g. exit code -6 on SteamOS): try again in compatibility mode
+        mode = self.modes[self.mode_i]
+        if code is None and self.ready and saved_mode(self.app) != mode and time.time() - self.started > 5:
+            save_mode(self.app, mode)        # this setup works here: start with it next time
+        if code not in (0, None) and not self.ready and not self.results and not self.closing and self.cmd \
+                and self.mode_i + 1 < len(self.modes):
+            # crashed before its window appeared (e.g. exit code -6): try the next graphics setup
             try:
-                self.proc = _launch_browser(self.app, self.cmd, True)
-                self.safe, self.started = True, time.time()
-                self.app.toast("The browser crashed - retrying in compatibility mode")
+                self.mode_i += 1
+                self.proc = _launch_browser(self.app, self.cmd, self.modes[self.mode_i])
+                self.started = time.time()
+                self.app.toast(f"The browser crashed - trying again ({MODE_NAMES[self.modes[self.mode_i]]})")
                 return
             except OSError:
                 pass
@@ -475,7 +537,8 @@ class BrowserOpen(Screen):
             fix = ("Reinstall it from Settings > Browser for the RA Library." if not FROZEN else
                    "Please send the log file to the developer.")
             app.dialog("The browser closed unexpectedly",
-                       f"Exit code {code}" + (" (also in compatibility mode)" if self.safe else "") + f". {fix} "
+                       f"Exit code {code}" + (f" (tried {len(self.modes)} graphics setups)" if self.mode_i else "")
+                       + f". {fix} "
                        f"Log: {browser_log()}" + (f"  ·  Last message: {last}" if last else ""))
 
     def draw(self, s):

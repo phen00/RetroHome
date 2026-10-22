@@ -45,8 +45,7 @@ class Settings(Menu):
             ("Screenshot backgrounds", "On" if cfg["screenshot_backgrounds"] else "Off", self._toggle_shots),
             ("Ask who's playing at start-up", "On" if cfg["ask_user_on_start"] else "Off", self._toggle_ask),
             ("Browser for the RA Library", self._browser_detail(), self._browser),
-            ("Browser compatibility mode", ("On - no GPU acceleration (use if the browser crashes)" if
-                                            cfg["browser_safe_mode"] else "Off"), self._toggle_browser_safe),
+            ("Browser graphics", self._browser_mode_detail(), self._next_browser_mode),
             ("Emulator setup", "Check which consoles are ready to play", self._emus),
             ("Emulators folder", (app.emus.overrides.get("emulators_dir") if app.emus else "") or
              "Automatic (finds EmuDeck's emulators)", self._emus_dir),
@@ -82,8 +81,18 @@ class Settings(Menu):
         return ("Installed - A to reinstall/update" if self._browser_ok()
                 else "Not installed - A to install (about 150-200 MB)")
 
-    def _toggle_browser_safe(self):
-        self.app.config["browser_safe_mode"] = not self.app.config["browser_safe_mode"]
+    def _browser_mode_detail(self):
+        from .ralib import MODE_NAMES, saved_mode, session_kind
+        m = saved_mode(self.app)
+        where = "Gaming Mode" if session_kind() == "gaming" else "this desktop"
+        return (f"{MODE_NAMES.get(m, m)} on {where} - A to change" if m else
+                "Automatic - if the browser crashes, RetroHome tries other setups and remembers the one that works")
+
+    def _next_browser_mode(self):
+        from .ralib import browser_modes, save_mode, saved_mode
+        modes = [""] + [m for m, _ in browser_modes()]
+        cur = saved_mode(self.app)
+        save_mode(self.app, modes[(modes.index(cur) + 1) % len(modes)] if cur in modes else "")
         self._build()
 
     def _browser(self):

@@ -473,6 +473,9 @@ def main():
         pass
     w = Browser(a)
     if a.fullscreen:
+        scr = app.primaryScreen()
+        if scr is not None:
+            w.setGeometry(scr.geometry())    # without a window manager showFullScreen alone keeps the small size
         w.showFullScreen()
     else:
         w.resize(1280, 800)

@@ -30,10 +30,7 @@
 
 ## Why RetroHome?
 
-You've got hundreds of games spread across dozens of emulators. RetroHome turns that folder of
-ROMs into something that feels like switching on a console: your games front and centre, the
-right emulator launched with one press, and every achievement you earn tracked, celebrated and
-counted towards your own level.
+Because downloading games on Steam Deck can be a hassle. You no longer need to enter desktop mode to unzip those roms. It'll do it for you. All you need to do is point it at the download and it'll handle the unzipping and placement into the correct folder.
 
 ## Features
 

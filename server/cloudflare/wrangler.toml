@@ -6,5 +6,5 @@ compatibility_date = "2026-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "retrohome"
-# Paste the database_id that "npx wrangler d1 create retrohome" prints:
-database_id = "PASTE-YOUR-DATABASE-ID-HERE"
+# The live RetroHome database (a new setup: paste the id "npx wrangler d1 create retrohome" prints)
+database_id = "f1757778-39b7-4f01-a3c6-0695f8027e45"

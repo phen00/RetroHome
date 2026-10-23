@@ -17,7 +17,7 @@ You need a free Cloudflare account (https://dash.cloudflare.com/sign-up) and Nod
 1. `npm install` (installs Cloudflare's `wrangler` tool into this folder)
 2. `npx wrangler login` (a browser window opens; press **Allow**)
 3. `npx wrangler d1 create retrohome`, then copy the `database_id` it prints into `wrangler.toml`
-   in place of `PASTE-YOUR-DATABASE-ID-HERE`
+   in place of the one there (only when setting up a new server)
 4. Optional: `npx wrangler d1 execute retrohome --remote --file=schema.sql` (the Worker creates the
    tables itself on first use anyway)
 5. `npx wrangler deploy` (prints your address, e.g. `https://retrohome-online.<you>.workers.dev`)

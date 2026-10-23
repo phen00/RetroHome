@@ -1,0 +1,14 @@
+{
+  "name": "retrohome-online",
+  "private": true,
+  "type": "module",
+  "description": "RetroHome Online on Cloudflare Workers + D1",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "schema": "wrangler d1 execute retrohome --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,10 @@
+# Cloudflare settings for RetroHome Online. See README.md in this folder for the setup steps.
+name = "retrohome-online"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "retrohome"
+# Paste the database_id that "npx wrangler d1 create retrohome" prints:
+database_id = "PASTE-YOUR-DATABASE-ID-HERE"

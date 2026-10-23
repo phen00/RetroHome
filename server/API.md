@@ -13,6 +13,7 @@ Errors return `{"error": "message"}` with a 4xx/5xx status.
 | PUT | `/api/v1/me/stats` | ✓ | `{"level", "xp", "mythic", "platinum", "beaten", "ra_user"}` → `{"ok": true}` |
 | GET | `/api/v1/me/library` | ✓ | → `{"favourites": [...], "history": {...}, "fav_events": {...}, "updated"}` |
 | PUT | `/api/v1/me/library` | ✓ | `{"favourites", "history", "fav_events"}` → `{"ok": true}` |
+| GET / PUT / DELETE | `/api/v1/me/data/<game>` | ✓ | `{"data": {...}}` (≤ 1 MB) → GET `{"app", "data", "updated"}` · Cloudflare server only |
 | GET | `/api/v1/leaderboard?limit=50` | – | → `{"entries": [{"username", "display_name", "level", "xp", "mythic", "platinum"}]}` |
 
 `user` objects: `{"id", "username", "display_name", "created", "stats"?}`.
@@ -29,3 +30,6 @@ hashed, and expire after 90 days; repeated failed logins are throttled per usern
 The RetroAchievements Web API key never leaves the device. Stats are self-reported by the
 app; a production server that wants trusted leaderboards should recompute them server-side
 from RetroAchievements using the linked `ra_user`.
+
+Two implementations: `retrohome_server.py` (run it on any machine) and `cloudflare/` (free hosting on
+Cloudflare Workers + D1; see `cloudflare/README.md`).

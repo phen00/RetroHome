@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from ... import __version__
+from ...accounts import online_server
 from .menu import Menu
 
 
@@ -21,13 +22,14 @@ class Settings(Menu):
         ra_detail = f"Signed in as {cfg['ra_user']}" if cfg.ra_enabled else "Not signed in"
         n_games = len(lib.all)
         remote = cfg["remote"] or {}
-        online = (f"Signed in as {remote.get('username')}" + (f" · {app.online_status}" if app.online_status else "")
-                  if remote.get("token") else "Not signed in - sync your profile across devices")
+        online = (f"Signed in as {remote.get('email') or remote.get('username')}" +
+                  (f" · {app.online_status}" if app.online_status else "")
+                  if remote.get("token") else "Not signed in - A to create an account with your email")
         ww, wh = app.window_size()
         items = [
             ("Switch user", f"Signed in here as {cfg['name']}", self._switch),
             ("Account", "Rename, PIN, sign out, delete", self._account),
-            ("RetroHome Online", online, self._online),
+            *([("RetroHome account", online, self._online)] if online_server() else []),
             ("RetroAchievements account", ra_detail, self._ra),
             ("Profile & trophies", "Level, XP, prestige styles, Platinum and Mythic awards", self._profile),
             ("ROM folder", cfg["rom_dir"] or "Not set", self._rom_dir),
@@ -123,7 +125,7 @@ class Settings(Menu):
             self.app.toast("Syncing with RetroHome Online…")
             return
         from .users import OnlineSignIn
-        self.app.push(OnlineSignIn(self.app))
+        self.app.push(OnlineSignIn(self.app, attach=self.app.config.active_id))
 
     def _profile(self):
         from .profile import Profile

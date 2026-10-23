@@ -58,20 +58,17 @@ At start-up RetroHome asks **Who's playing?** Each user has their own RetroAchie
 favourites, play history and level. Users can have a PIN (press **Y** on a user to rename,
 set/remove a PIN or delete them). *Settings → Switch user* changes user without restarting.
 
-**RetroHome Online** (optional) keeps a user's favourites, play history, level and awards in sync
-across devices and puts them on a shared leaderboard. It needs a RetroHome server: run the
-reference one in `server/` on any PC or a cheap VPS:
+**RetroHome account** (optional) keeps a user's favourites, play history, level and awards in
+sync across devices and puts them on a shared leaderboard. The first time a user is chosen,
+RetroHome asks for an **email and password** to create an account (or *Not now*; it's also in
+*Settings → RetroHome account*). That's all: the server is built in and RetroHome connects to it
+by itself. On a new device, choose *Sign in with email* on the user screen. Your
+RetroAchievements key never leaves the device, and other players only ever see your name, never
+your email.
 
-```
-python3 server/retrohome_server.py --port 8787 --db retrohome.db
-```
-
-Then *Sign in online* on the user screen, enter the server address (`192.168.1.20:8787` on your
-own network, or an `https://` address on the internet), and create an account. Plain `http://`
-is only allowed for your own network; public servers must use HTTPS (put the reference server
-behind Caddy or nginx). The API is documented in `server/API.md`, so a bigger server can replace
-the reference one later without changing the app. Your RetroAchievements key never leaves the
-device.
+The server runs on Cloudflare Workers + D1 (`server/cloudflare`, see its README). The API is in
+`server/API.md`; `server/retrohome_server.py` is the same server to run on your own machine
+(start RetroHome with `RETROHOME_SERVER=http://<address>:8787` to use it instead).
 
 ## Levels and awards
 

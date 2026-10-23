@@ -1,15 +1,42 @@
 // RetroHome Online on Cloudflare Workers + D1.
-// Same API as server/retrohome_server.py (see server/API.md), plus /api/v1/me/data/<app> for other games.
+// Same API as server/retrohome_server.py (see server/API.md): accounts are email + password. Plus
+// /api/v1/me/data/<app> for other games. Creates its own tables on first use.
 
 const API = "/api/v1";
 const TOKEN_DAYS = 90;
-const USERNAME_RE = /^[A-Za-z0-9_.-]{3,24}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const APP_RE = /^[A-Za-z0-9_.-]{1,40}$/;
 const MAX_BODY = 4 * 1024 * 1024;          // library uploads
 const MAX_APP_DATA = 1024 * 1024;          // 1 MB per game per player
 // Password hashing has to fit the free plan's small CPU allowance per request, so it uses fewer
 // PBKDF2 rounds than the Python server. Logins are throttled per username on top of that.
 const PBKDF2_ITERS = 10000;
+
+// The tables (same as schema.sql). Created automatically on first use, so setup needs no database console.
+const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL COLLATE NOCASE,
+     display_name TEXT NOT NULL, pw_hash TEXT NOT NULL, created REAL NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY,
+     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created REAL NOT NULL, expires REAL NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id)`,
+  `CREATE TABLE IF NOT EXISTS stats (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+     level INTEGER DEFAULT 1, xp INTEGER DEFAULT 0, mythic INTEGER DEFAULT 0, platinum INTEGER DEFAULT 0,
+     beaten INTEGER DEFAULT 0, ra_user TEXT DEFAULT '', updated REAL)`,
+  `CREATE INDEX IF NOT EXISTS stats_xp ON stats(xp DESC)`,
+  `CREATE TABLE IF NOT EXISTS library (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+     data TEXT NOT NULL, updated REAL)`,
+  `CREATE TABLE IF NOT EXISTS app_data (user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     app TEXT NOT NULL, data TEXT NOT NULL, updated REAL, PRIMARY KEY (user_id, app))`,
+  `CREATE TABLE IF NOT EXISTS login_fails (email TEXT PRIMARY KEY COLLATE NOCASE, count INTEGER NOT NULL,
+     last REAL NOT NULL)`,
+];
+let schemaReady = false;
+
+async function ensureSchema(db) {
+  if (schemaReady) return;
+  await db.batch(SCHEMA.map((q) => db.prepare(q)));
+  schemaReady = true;
+}
 
 const enc = new TextEncoder();
 const now = () => Date.now() / 1000;
@@ -71,8 +98,10 @@ async function body(request, limit = MAX_BODY) {
   return data;
 }
 
-function userJson(u, st) {
-  const out = { id: u.id, username: u.username, display_name: u.display_name, created: u.created };
+// "username" is the display name: emails are only ever shown to their owner.
+function userJson(u, st, self = true) {
+  const out = { id: u.id, username: u.display_name, display_name: u.display_name, created: u.created };
+  if (self) out.email = u.email;
   if (st) {
     out.stats = { level: st.level, xp: st.xp, mythic: st.mythic, platinum: st.platinum, beaten: st.beaten,
                   ra_user: st.ra_user };
@@ -113,16 +142,16 @@ const routes = {
 
   "POST /auth/register": async (req, db) => {
     const d = await body(req);
-    const username = String(d.username || "").trim();
+    const email = String(d.email || d.username || "").trim().toLowerCase();
     const password = String(d.password || "");
-    const display = (String(d.display_name || username).trim().slice(0, 24)) || username;
-    if (!USERNAME_RE.test(username)) throw new HttpError(400, "Usernames are 3-24 letters, numbers, _ . or -");
+    const display = String(d.display_name || "").trim().slice(0, 24) || email.split("@")[0].slice(0, 24);
+    if (email.length > 254 || !EMAIL_RE.test(email)) throw new HttpError(400, "Enter a valid email address.");
     if (password.length < 8) throw new HttpError(400, "Passwords need at least 8 characters.");
-    const exists = await db.prepare("SELECT id FROM users WHERE username=?").bind(username).first();
-    if (exists) throw new HttpError(409, "That username is taken.");
+    const exists = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
+    if (exists) throw new HttpError(409, "There's already an account with that email - sign in instead.");
     const t = now();
-    const res = await db.prepare("INSERT INTO users (username, display_name, pw_hash, created) VALUES (?,?,?,?)")
-      .bind(username, display, await pwHash(password), t).run();
+    const res = await db.prepare("INSERT INTO users (email, display_name, pw_hash, created) VALUES (?,?,?,?)")
+      .bind(email, display, await pwHash(password), t).run();
     const uid = res.meta.last_row_id;
     await db.prepare("INSERT INTO stats (user_id, updated) VALUES (?,?)").bind(uid, t).run();
     const u = await db.prepare("SELECT * FROM users WHERE id=?").bind(uid).first();
@@ -131,21 +160,21 @@ const routes = {
 
   "POST /auth/login": async (req, db) => {
     const d = await body(req);
-    const username = String(d.username || "").trim();
+    const email = String(d.email || d.username || "").trim().toLowerCase();
     const password = String(d.password || "");
-    const f = await db.prepare("SELECT count, last FROM login_fails WHERE username=?").bind(username).first();
+    const f = await db.prepare("SELECT count, last FROM login_fails WHERE email=?").bind(email).first();
     const n = f ? f.count : 0;
     if (n >= 5 && now() - f.last < 60 * Math.min(30, 2 ** (n - 5))) {
       throw new HttpError(429, "Too many attempts - wait a bit and try again.");
     }
-    const u = await db.prepare("SELECT * FROM users WHERE username=?").bind(username).first();
+    const u = await db.prepare("SELECT * FROM users WHERE email=?").bind(email).first();
     if (!u || !(await pwCheck(password, u.pw_hash))) {
-      await db.prepare("INSERT INTO login_fails (username, count, last) VALUES (?,1,?) " +
-                       "ON CONFLICT(username) DO UPDATE SET count = count + 1, last = excluded.last")
-        .bind(username.toLowerCase(), now()).run();
-      throw new HttpError(401, "Wrong username or password.");
+      await db.prepare("INSERT INTO login_fails (email, count, last) VALUES (?,1,?) " +
+                       "ON CONFLICT(email) DO UPDATE SET count = count + 1, last = excluded.last")
+        .bind(email, now()).run();
+      throw new HttpError(401, "Wrong email or password.");
     }
-    await db.prepare("DELETE FROM login_fails WHERE username=?").bind(username).run();
+    await db.prepare("DELETE FROM login_fails WHERE email=?").bind(email).run();
     const st = await db.prepare("SELECT * FROM stats WHERE user_id=?").bind(u.id).first();
     return json(200, { token: await newSession(db, u.id), user: userJson(u, st) });
   },
@@ -160,6 +189,15 @@ const routes = {
     const { u } = await auth(req, db);
     const st = await db.prepare("SELECT * FROM stats WHERE user_id=?").bind(u.id).first();
     return json(200, { user: userJson(u, st) });
+  },
+
+  "PUT /me/name": async (req, db) => {
+    const { u } = await auth(req, db);
+    const d = await body(req);
+    const name = String(d.display_name || "").trim().slice(0, 24);
+    if (!name) throw new HttpError(400, "Enter a name.");
+    await db.prepare("UPDATE users SET display_name=? WHERE id=?").bind(name, u.id).run();
+    return json(200, { ok: true });
   },
 
   "PUT /me/stats": async (req, db) => {
@@ -194,7 +232,7 @@ const routes = {
   "GET /leaderboard": async (req, db, url) => {
     const limit = Math.max(1, Math.min(200, parseInt(url.searchParams.get("limit") || "50", 10) || 50));
     const { results } = await db.prepare(
-      "SELECT u.username, u.display_name, s.level, s.xp, s.mythic, s.platinum FROM stats s " +
+      "SELECT u.display_name AS username, u.display_name, s.level, s.xp, s.mythic, s.platinum FROM stats s " +
       "JOIN users u ON u.id = s.user_id ORDER BY s.xp DESC LIMIT ?").bind(limit).all();
     return json(200, { entries: results });
   },
@@ -229,6 +267,8 @@ export default {
     if (!path.startsWith(API)) return json(404, { error: "Not found." });
     path = path.slice(API.length);
     try {
+      if (!env.DB) throw new HttpError(500, "The D1 database isn't connected to this Worker (binding name DB).");
+      await ensureSchema(env.DB);
       if (path.startsWith("/me/data/")) return await appData(request, env.DB, decodeURIComponent(path.slice(9)));
       const fn = routes[`${request.method} ${path}`];
       if (!fn) return json(404, { error: "Not found." });

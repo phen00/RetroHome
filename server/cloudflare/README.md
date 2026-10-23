@@ -1,5 +1,9 @@
 # RetroHome Online on Cloudflare (free)
 
+**Live at `https://retrohome-online.retrohome.workers.dev`**: Worker `retrohome-online`, D1 database
+`retrohome` (Western Europe), on the RetroHome Cloudflare account. RetroHome has this address built
+in (`retrohome/accounts.py`, `BUILTIN_SERVER`). The Worker creates its own tables on first use.
+
 Runs the RetroHome Online server on Cloudflare's free plan: a **Worker** (the program that answers
 RetroHome) and a **D1** database (Cloudflare's SQLite database that stores the accounts). No server
 to rent or keep switched on. Same API as `../retrohome_server.py` (see `../API.md`), plus
@@ -14,13 +18,14 @@ You need a free Cloudflare account (https://dash.cloudflare.com/sign-up) and Nod
 2. `npx wrangler login` (a browser window opens; press **Allow**)
 3. `npx wrangler d1 create retrohome`, then copy the `database_id` it prints into `wrangler.toml`
    in place of `PASTE-YOUR-DATABASE-ID-HERE`
-4. `npx wrangler d1 execute retrohome --remote --file=schema.sql` (creates the tables)
+4. Optional: `npx wrangler d1 execute retrohome --remote --file=schema.sql` (the Worker creates the
+   tables itself on first use anyway)
 5. `npx wrangler deploy` (prints your address, e.g. `https://retrohome-online.<you>.workers.dev`)
 6. Check it: open `https://retrohome-online.<you>.workers.dev/api/v1/health` in a browser. You should
    see `{"ok":true,...}`
 
-In RetroHome: **Settings → RetroHome Online** → enter that address → create your account. Friends
-enter the same address and create their own accounts.
+Then put that address in `BUILTIN_SERVER` in `retrohome/accounts.py` and release a new version.
+Players never enter an address: they just create an account with their email and a password.
 
 ## Later
 

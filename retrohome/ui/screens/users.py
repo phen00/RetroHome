@@ -3,7 +3,7 @@ import math
 
 import pygame
 
-from ...accounts import AccountError, OnlineClient, check_pin, hash_pin, normalise_server
+from ...accounts import AccountError, OnlineClient, check_pin, hash_pin, online_server
 from ...retroach import MEDIA
 from .. import gfx
 from ..app import Screen
@@ -50,7 +50,9 @@ class UserSelect(Screen):
     def _entries(self):
         out = [("user", pid) for pid in self.app.config.profiles]
         out.append(("add", None))
-        out.append(("online", None))
+        from ...accounts import online_server
+        if online_server():
+            out.append(("online", None))
         return out
 
     def on_action(self, a):
@@ -165,7 +167,7 @@ class UserSelect(Screen):
                 gfx.draw.circle(s, gfx.TEXT, c, 34, 2)
                 gfx.draw.ellipse(s, gfx.TEXT, (c[0] - 15, c[1] - 34, 30, 68), 2)
                 gfx.draw.line(s, gfx.TEXT, (c[0] - 34, c[1]), (c[0] + 34, c[1]), 2)
-                gfx.blit_text(s, "Sign in online", (r.centerx, r.y + 178), 22, gfx.TEXT, True, anchor="midtop")
+                gfx.blit_text(s, "Sign in with email", (r.centerx, r.y + 178), 22, gfx.TEXT, True, anchor="midtop")
                 gfx.blit_text(s, "RetroHome account", (r.centerx, r.y + 210), 14, gfx.TEXT_DIM, anchor="midtop")
         bob = 4 * math.sin(self.app.t * 2)
         gfx.blit_text(s, "RetroHome", (gfx.W // 2, gfx.H - 90 + bob), 16, gfx.TEXT_FAINT, True, anchor="center")
@@ -198,7 +200,7 @@ class ManageUser(Menu):
             ("Remove PIN" if p.get("pin") else "Set a PIN", "Ask for a PIN when choosing this user", self._pin),
         ]
         if remote.get("token"):
-            items.append(("Sign out of RetroHome Online", f"{remote.get('username')} on {remote.get('server')}",
+            items.append(("Sign out of your RetroHome account", remote.get("email") or remote.get("username") or "",
                           self._sign_out))
         items.append(("Delete this user", "Removes their favourites, history and linked accounts here",
                       self._delete))
@@ -210,6 +212,10 @@ class ManageUser(Menu):
                 self.prof["name"] = v[:24]
                 self.app.config.save()
                 self._build()
+                remote = self.prof.get("remote") or {}
+                if remote.get("token") and online_server():     # friends see the new name too
+                    client = OnlineClient(online_server(), remote["token"])
+                    self.app.tasks.submit(lambda: client.set_name(v[:24]), error=lambda e: None)
         self.app.push(Keyboard(self.app, "Name", self.prof.get("name", ""), done))
 
     def _pin(self):
@@ -235,7 +241,7 @@ class ManageUser(Menu):
 
         def work():
             try:
-                OnlineClient(remote["server"], remote["token"]).logout()
+                OnlineClient(online_server() or remote["server"], remote["token"]).logout()
             except (AccountError, KeyError):
                 pass
         self.app.tasks.submit(work)
@@ -260,77 +266,89 @@ class ManageUser(Menu):
 
 
 class OnlineSignIn(Menu):
-    def __init__(self, app):
-        self.server = app.config["server_url"] or ""
-        self.username = ""
+    """RetroHome account: just an email and a password. The server is built in (accounts.online_server)."""
+
+    def __init__(self, app, prompt=False, attach=None):
+        self.prompt = prompt          # shown by itself after choosing a user: offers "Not now"
+        self.attach = attach          # local profile to link the account to (None: find or create one)
+        self.email = ""
         self.password = ""
         self.status = ""
         self.busy = False
         super().__init__(
-            app, "RetroHome Online",
-            "Sign in to keep your favourites, play history, level and awards in sync across devices. "
-            "Enter the address of your RetroHome server (see server/ in the download to run one).",
-            on_back=lambda: app.pop())
+            app, "RetroHome account",
+            "Create a free account with your email and a password to keep your level, awards, favourites "
+            "and play time safe, and in sync on all your devices." +
+            (" You can also do this later in Settings." if prompt else ""),
+            on_back=self._later if prompt else (lambda: app.pop()))
         self._build()
 
     def _build(self):
-        self.set_items([
-            ("Server", self.server or "Not set", lambda: self._edit("Server address", "server")),
-            ("Username", self.username or "Not set", lambda: self._edit("Username", "username")),
-            ("Password", "•" * len(self.password) if self.password else "Not set",
-             lambda: self._edit("Password", "password", True)),
-            ("Sign in", self.status or "Use an existing account", lambda: self._go(False)),
-            ("Create account", "New username + password (8+ characters)", lambda: self._go(True)),
-            ("Back", "", self.app.pop),
-        ])
+        items = [
+            ("Email", self.email or "Not set", lambda: self._edit("Your email address", "email")),
+            ("Password", "•" * len(self.password) if self.password else "Not set - 8 or more characters",
+             lambda: self._edit("Password (8 or more characters)", "password", True)),
+            ("Create account", self.status or "New to RetroHome", lambda: self._go(True)),
+            ("Sign in", "I already have an account", lambda: self._go(False)),
+        ]
+        items.append(("Not now", "", self._later) if self.prompt else ("Back", "", self.app.pop))
+        self.set_items(items)
+
+    def _later(self):
+        if self.prompt and self.attach in self.app.config.profiles:
+            self.app.config.profiles[self.attach]["online_prompted"] = True
+            self.app.config.save()
+        self.app.pop()
 
     def _edit(self, title, field, secret=False):
         def done(v):
-            setattr(self, field, v)
+            setattr(self, field, v.strip() if field == "email" else v)
+            self.status = ""
             self._build()
         self.app.push(Keyboard(self.app, title, getattr(self, field), done, secret=secret))
 
     def _go(self, create):
+        from ...accounts import EMAIL_RE, online_server
         if self.busy:
             return
-        try:
-            server = normalise_server(self.server)
-        except AccountError as e:
-            self.status = str(e)
-            self._build()
-            return
-        if not self.username or not self.password:
-            self.status = "Enter a username and password first"
+        server = online_server()
+        self.status = ""
+        if not server:
+            self.status = "RetroHome Online isn't available in this version"
+        elif not EMAIL_RE.match(self.email):
+            self.status = "Enter your email address first"
+        elif len(self.password) < 8:
+            self.status = "Passwords need at least 8 characters"
+        if self.status:
             self._build()
             return
         self.busy = True
-        self.status = "Creating account…" if create else "Signing in…"
+        self.status = "Creating your account…" if create else "Signing in…"
         self._build()
         client = OnlineClient(server)
-        user, pw = self.username, self.password
+        email, pw = self.email.lower(), self.password
+        cfg = self.app.config
+        name = (cfg.profiles.get(self.attach) or {}).get("name") or email.split("@")[0]
 
         def work():
-            return client.register(user, pw) if create else client.login(user, pw)
+            return client.register(email, pw, name) if create else client.login(email, pw)
 
         def ok(res):
             self.busy = False
             self.password = ""
-            cfg = self.app.config
-            cfg["server_url"] = server
             u = res.get("user") or {}
-            pid = None
-            for k, p in cfg.profiles.items():
-                r = p.get("remote") or {}
-                if r.get("server") == server and str(r.get("username", "")).lower() == str(u.get("username", user)).lower():
-                    pid = k
-                    break
+            pid = next((k for k, p in cfg.profiles.items()
+                        if str((p.get("remote") or {}).get("email", "")).lower() == email), None)
+            if pid is None and self.attach in cfg.profiles and not (cfg.profiles[self.attach].get("remote") or {}).get("token"):
+                pid = self.attach
             is_new = pid is None
             if is_new:
-                pid = cfg.new_profile(u.get("display_name") or user)
-            cfg.profiles[pid]["remote"] = {"server": server, "username": u.get("username", user),
+                pid = cfg.new_profile(u.get("display_name") or name)
+            cfg.profiles[pid]["remote"] = {"server": server, "email": email, "username": u.get("display_name") or name,
                                            "user_id": u.get("id"), "token": client.token}
+            cfg.profiles[pid]["online_prompted"] = True
             cfg.save()
-            self.app.toast(("Account created - welcome, " if create else "Signed in as ") + u.get("username", user))
+            self.app.toast("Account created - you're all set" if create else f"Signed in as {email}")
             after_sign_in(self.app, pid, new_user=is_new)
 
         def bad(e):

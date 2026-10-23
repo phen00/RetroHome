@@ -22,13 +22,13 @@ from urllib.parse import parse_qs, urlparse
 
 API = "/api/v1"
 TOKEN_DAYS = 90
-USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,24}$")
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 MAX_BODY = 4 * 1024 * 1024
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    email TEXT UNIQUE NOT NULL COLLATE NOCASE,
     display_name TEXT NOT NULL,
     pw_hash TEXT NOT NULL,
     created REAL NOT NULL
@@ -73,7 +73,7 @@ class Store:
         self.local = threading.local()
         with self.db() as c:
             c.executescript(SCHEMA)
-        self.fail = {}            # username -> (count, last_ts) for login throttling
+        self.fail = {}            # email -> (count, last_ts) for login throttling
         self.fail_lock = threading.Lock()
 
     def db(self):
@@ -104,7 +104,9 @@ class Store:
 
 
 def user_json(u, stats=None):
-    out = {"id": u["id"], "username": u["username"], "display_name": u["display_name"], "created": u["created"]}
+    """"username" is the display name; the email is only ever sent to its owner."""
+    out = {"id": u["id"], "username": u["display_name"], "display_name": u["display_name"],
+           "email": u["email"], "created": u["created"]}
     if stats:
         out["stats"] = {k: stats[k] for k in ("level", "xp", "mythic", "platinum", "beaten", "ra_user")}
     return out
@@ -171,6 +173,7 @@ class Handler(BaseHTTPRequestHandler):
                 ("POST", "/auth/logout"): self.logout,
                 ("GET", "/me"): self.me,
                 ("PUT", "/me/stats"): self.put_stats,
+                ("PUT", "/me/name"): self.put_name,
                 ("GET", "/me/library"): self.get_library,
                 ("PUT", "/me/library"): self.put_library,
                 ("GET", "/leaderboard"): lambda: self.leaderboard(parse_qs(url.query)),
@@ -190,38 +193,38 @@ class Handler(BaseHTTPRequestHandler):
 
     def register(self):
         d = self.body()
-        username = str(d.get("username", "")).strip()
+        email = str(d.get("email") or d.get("username") or "").strip().lower()
         password = str(d.get("password", ""))
-        display = str(d.get("display_name") or username).strip()[:24]
-        if not USERNAME_RE.match(username):
-            return self.err(400, "Usernames are 3-24 letters, numbers, _ . or -")
+        display = str(d.get("display_name") or "").strip()[:24] or email.split("@")[0][:24]
+        if len(email) > 254 or not EMAIL_RE.match(email):
+            return self.err(400, "Enter a valid email address.")
         if len(password) < 8:
             return self.err(400, "Passwords need at least 8 characters.")
         try:
             with self.store.db() as c:
-                cur = c.execute("INSERT INTO users (username, display_name, pw_hash, created) VALUES (?,?,?,?)",
-                                (username, display or username, pw_hash(password), time.time()))
+                cur = c.execute("INSERT INTO users (email, display_name, pw_hash, created) VALUES (?,?,?,?)",
+                                (email, display, pw_hash(password), time.time()))
                 uid = cur.lastrowid
                 c.execute("INSERT INTO stats (user_id, updated) VALUES (?,?)", (uid, time.time()))
         except sqlite3.IntegrityError:
-            return self.err(409, "That username is taken.")
+            return self.err(409, "There's already an account with that email - sign in instead.")
         u = self.store.db().execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         self.send(201, {"token": self.store.new_session(uid), "user": user_json(u)})
 
     def login(self):
         d = self.body()
-        username = str(d.get("username", "")).strip()
+        email = str(d.get("email") or d.get("username") or "").strip().lower()
         password = str(d.get("password", ""))
-        key = username.lower()
+        key = email
         with self.store.fail_lock:
             n, last = self.store.fail.get(key, (0, 0))
         if n >= 5 and time.time() - last < 60 * min(30, 2 ** (n - 5)):
             return self.err(429, "Too many attempts - wait a bit and try again.")
-        u = self.store.db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        u = self.store.db().execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
         if not u or not pw_check(password, u["pw_hash"]):
             with self.store.fail_lock:
                 self.store.fail[key] = (n + 1, time.time())
-            return self.err(401, "Wrong username or password.")
+            return self.err(401, "Wrong email or password.")
         with self.store.fail_lock:
             self.store.fail.pop(key, None)
         st = self.store.db().execute("SELECT * FROM stats WHERE user_id=?", (u["id"],)).fetchone()
@@ -241,6 +244,17 @@ class Handler(BaseHTTPRequestHandler):
             return
         st = self.store.db().execute("SELECT * FROM stats WHERE user_id=?", (u["id"],)).fetchone()
         self.send(200, {"user": user_json(u, st)})
+
+    def put_name(self):
+        u, _ = self.auth()
+        if not u:
+            return
+        name = str(self.body().get("display_name") or "").strip()[:24]
+        if not name:
+            return self.err(400, "Enter a name.")
+        with self.store.db() as c:
+            c.execute("UPDATE users SET display_name=? WHERE id=?", (name, u["id"]))
+        self.send(200, {"ok": True})
 
     def put_stats(self):
         u, _ = self.auth()
@@ -285,7 +299,7 @@ class Handler(BaseHTTPRequestHandler):
     def leaderboard(self, q):
         limit = max(1, min(200, int((q.get("limit") or ["50"])[0])))
         rows = self.store.db().execute(
-            "SELECT u.username, u.display_name, s.level, s.xp, s.mythic, s.platinum FROM stats s "
+            "SELECT u.display_name AS username, u.display_name, s.level, s.xp, s.mythic, s.platinum FROM stats s "
             "JOIN users u ON u.id = s.user_id ORDER BY s.xp DESC LIMIT ?", (limit,)).fetchall()
         self.send(200, {"entries": [dict(r) for r in rows]})
 

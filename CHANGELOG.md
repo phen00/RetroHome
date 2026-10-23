@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.15 — 2026-10-23
+- **RetroHome accounts:** RetroHome Online now just works. The first time you choose a user,
+  RetroHome asks for an email and a password to create your account (or *Not now*), and it
+  connects to the RetroHome server by itself. No server address to enter
+- Your level, awards, favourites and play time stay in sync across your devices. Other players
+  only see your name, never your email
+- Signing in on another device: choose **Sign in with email** on the user screen, or
+  **Settings → RetroHome account**
+
 ## 1.0.14 — 2026-10-22
 - Fixed games not starting on the Steam Deck ("The emulator closed straight away… exit code 127"):
   emulators were picking up libraries bundled with RetroHome instead of SteamOS's own

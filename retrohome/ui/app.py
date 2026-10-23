@@ -318,10 +318,11 @@ class App:
         self.online = None
         self.online_status = ""
         remote = self.config["remote"] or {}
-        if remote.get("token") and remote.get("server"):
-            from ..accounts import OnlineClient
+        from ..accounts import OnlineClient, online_server
+        server = online_server()
+        if remote.get("token") and server:
             try:
-                self.online = OnlineClient(remote["server"], remote["token"])
+                self.online = OnlineClient(server, remote["token"])   # connects by itself in the background
                 self.sync_online(pull=True)
             except Exception as e:  # noqa: BLE001
                 self.online_status = str(e)
@@ -330,6 +331,10 @@ class App:
             self.stack = [Welcome(self)]
             return
         self.open_library()
+        prof = self.config.profile
+        if server and not remote.get("token") and not prof.get("online_prompted"):
+            from .screens.users import OnlineSignIn
+            self.push(OnlineSignIn(self, prompt=True, attach=pid))     # asked once per user
 
     def sync_online(self, pull=False):
         """Upload level/awards and merge favourites + play history with the server."""

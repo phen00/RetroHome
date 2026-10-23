@@ -16,7 +16,6 @@ GLOBAL_DEFAULTS = {
     "hidden_systems": ["cloud", "remoteplay", "android", "steam", "epic", "lutris",
                        "kodi", "moonlight", "desktop"],
     "emulation_dir": "",          # optional override for the EmuDeck "Emulation" folder
-    "server_url": "",             # RetroHome Online server (empty = not configured)
     "ask_user_on_start": True,
     "active_profile": "",
     "screenshot_backgrounds": True,
@@ -38,6 +37,7 @@ PROFILE_DEFAULTS = {
     "remote": {},
     "disc_choice": {},
     "fav_events": {},             # game_id -> [timestamp, is_favourite] (for syncing removals)            # game_id -> "all" or disc index                 # {"server", "username", "token", "user_id"} when signed in online
+    "online_prompted": False,     # asked once whether to create a RetroHome account
     "created": 0,
 }
 PROFILE_KEYS = set(PROFILE_DEFAULTS)

@@ -204,7 +204,7 @@ class Profile(Screen):
         sub = f"RetroAchievements: {cfg['ra_user']}" if cfg["ra_user"] else "RetroAchievements not linked"
         remote = cfg["remote"] or {}
         if remote.get("token"):
-            sub += f"   ·   Online as {remote.get('username')}" + \
+            sub += f"   ·   Signed in as {remote.get('email') or remote.get('username')}" + \
                 (f" ({self.app.online_status})" if self.app.online_status else "")
         gfx.blit_text(s, sub, (x, 74), 16, gfx.TEXT_DIM, max_w=gfx.W - 120)
         tx = x

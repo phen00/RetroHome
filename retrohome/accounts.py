@@ -9,6 +9,8 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import os
+import re
 import secrets
 import urllib.error
 import urllib.parse
@@ -18,6 +20,19 @@ from . import __version__
 from .net import _ctx
 
 API = "/api/v1"
+
+# The RetroHome Online server every copy of RetroHome uses (Cloudflare Workers + D1, see
+# server/cloudflare). Players never pick a server; RETROHOME_SERVER overrides it for testing.
+BUILTIN_SERVER = "https://retrohome-online.retrohome.workers.dev"
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def online_server() -> str:
+    """The server address, or "" when online features are off (RETROHOME_SERVER=off)."""
+    env = os.environ.get("RETROHOME_SERVER", "").strip()
+    if env.lower() == "off":
+        return ""
+    return env or BUILTIN_SERVER
 
 
 # ---------------------------------------------------------------- local PINs
@@ -101,16 +116,19 @@ class OnlineClient:
     def health(self):
         return self._req("GET", "/health")
 
-    def register(self, username, password, display_name=""):
-        res = self._req("POST", "/auth/register", {"username": username, "password": password,
-                                                   "display_name": display_name or username})
+    def register(self, email, password, display_name=""):
+        res = self._req("POST", "/auth/register", {"email": email, "password": password,
+                                                   "display_name": display_name})
         self.token = res.get("token", "")
         return res
 
-    def login(self, username, password):
-        res = self._req("POST", "/auth/login", {"username": username, "password": password})
+    def login(self, email, password):
+        res = self._req("POST", "/auth/login", {"email": email, "password": password})
         self.token = res.get("token", "")
         return res
+
+    def set_name(self, display_name):
+        return self._req("PUT", "/me/name", {"display_name": display_name})
 
     def logout(self):
         try:

@@ -1,7 +1,8 @@
--- RetroHome Online database (Cloudflare D1). Safe to run again: it only creates what's missing.
+-- RetroHome Online database (Cloudflare D1). The Worker creates these itself on first use (src/worker.js
+-- carries a copy); running this file by hand is optional and safe to repeat.
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    email TEXT UNIQUE NOT NULL COLLATE NOCASE,
     display_name TEXT NOT NULL,
     pw_hash TEXT NOT NULL,
     created REAL NOT NULL
@@ -32,9 +33,9 @@ CREATE TABLE IF NOT EXISTS app_data (
     updated REAL,
     PRIMARY KEY (user_id, app)
 );
--- failed logins per username, for throttling
+-- failed logins per email, for throttling
 CREATE TABLE IF NOT EXISTS login_fails (
-    username TEXT PRIMARY KEY COLLATE NOCASE,
+    email TEXT PRIMARY KEY COLLATE NOCASE,
     count INTEGER NOT NULL,
     last REAL NOT NULL
 );
